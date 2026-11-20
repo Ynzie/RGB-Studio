@@ -1,0 +1,2902 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RGB Studio</title>
+<style>
+  /* Theme variables are filled in from the chosen preset (THEMES in the script,
+     same presets as ClipVault / PC Shield). These are the Cotton Candy defaults. */
+  :root {
+    --bg: #0b0b10; --panel: #14141c; --panel2: #1f1f26; --panel3: #282830; --border: #2a2a32;
+    --text: #ecebf3; --muted: #8d8b9c; --faint: #5d5b6b;
+    --accent: #ff7ac8; --accent2: #7fd6ff; --on-accent: #fff;
+    --accent-soft: rgba(255,122,200,.16); --accent-glow: rgba(255,122,200,.35);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--panel3); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
+  body {
+    color: var(--text); font: 14px/1.45 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    height: 100vh; display: flex; overflow: hidden;
+    /* The glow sits low so the top edge is plain --bg: the window buttons are
+       painted in exactly that color, so the top bar blends in seamlessly. */
+    background:
+      radial-gradient(1000px 560px at 105% 115%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
+      radial-gradient(800px 480px at -5% 110%, color-mix(in srgb, var(--accent2) 9%, transparent), transparent 70%),
+      var(--bg);
+  }
+  /* Top bar: drag the window from here; Windows draws min/max/close on the right */
+  .titlebar { height: 36px; flex: none; -webkit-app-region: drag; }
+  nav .brand { -webkit-app-region: drag; }
+  .pages { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+  /* ---- sidebar ---- */
+  nav { width: 236px; flex: none; background: color-mix(in srgb, var(--panel) 92%, transparent);
+        border-right: 1px solid var(--border); padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+  nav .brand { display: flex; align-items: center; gap: 10px; padding: 0 4px 12px; }
+  nav .brand img { width: 30px; height: 30px; }
+  nav .brand span { font-size: 19px; font-weight: 800; letter-spacing: .2px; }
+  nav .section { color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: 1.5px; padding: 12px 10px 4px; }
+  nav .spacer { flex: 1; }
+  nav button[data-page] { display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; border: none;
+        color: var(--muted); padding: 8px 10px; border-radius: 9px; cursor: pointer; font: 600 13.5px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; }
+  nav button[data-page] svg { width: 17px; height: 17px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav button[data-page]:hover { background: var(--panel3); color: var(--text); }
+  nav button[data-page] { border: 1px solid transparent; }
+  nav button[data-page].active { background: var(--glass-sheen), var(--accent-soft); color: var(--text); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 4px 14px var(--accent-soft); }
+  nav button[data-page].active svg { stroke: var(--accent); }
+  .status-card { background: var(--glass-sheen), color-mix(in srgb, var(--panel2) 85%, transparent); box-shadow: var(--glass-shadow); border-radius: 12px;
+        padding: 11px 12px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 8px; }
+  .status-card .st { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 8px #ff4d5e; flex: none; }
+  .status-dot.on { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; }
+
+  main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  section.page { flex: 1; overflow-y: auto; padding: 4px 32px 32px; display: none; }
+  section.page.visible { display: block; }
+  .page-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .page-head svg { width: 28px; height: 28px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none;
+        filter: drop-shadow(0 0 10px var(--accent-glow)); }
+  .page-head h1 { font-size: 24px; font-weight: 700; line-height: 1.15; }
+  .page-head .sub { color: var(--muted); font-size: 13px; }
+
+  .card { background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0) 120px), color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--border);
+          border-radius: 14px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+  .card h2 { font-size: 14.5px; font-weight: 650; margin-bottom: 12px; color: var(--text); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: start; }
+  .device .ledbar { display: block; width: 100%; height: 34px; margin: 4px 0 12px; border-radius: 10px;
+    background: rgba(0,0,0,.35); box-shadow: inset 0 1px 3px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.05); }
+  .device { background: var(--glass-sheen), color-mix(in srgb, var(--panel2) 90%, transparent); box-shadow: var(--glass-shadow);
+    border-radius: 14px; padding: 14px 15px; transition: box-shadow .15s; }
+  .device:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 8px 24px var(--accent-soft); }
+  .device .name { font-weight: 650; font-size: 15px; margin-bottom: 2px; flex: 1; min-width: 0; }
+  .device > .row:first-child { flex-wrap: nowrap; align-items: flex-start; }
+  .zrow { display: grid; grid-template-columns: 1fr 56px 96px; gap: 6px; align-items: center; margin-top: 6px; }
+  .zrow input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px; }
+  .zrow select { width: 100%; margin: 0; padding: 5px 6px; }
+  .zrow .meta { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zrow .note { grid-column: 1 / -1; margin: 0; }
+  .device .meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .device select { width: 100%; margin-bottom: 6px; }
+
+  /* ---- Glass: one recipe for every control (buttons, inputs, tiles, cards).
+     Sheen on the top half, brighter top edge, soft depth shadow. ---- */
+  :root {
+    --glass-sheen: linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.06) 46%, rgba(255,255,255,.01) 54%, rgba(255,255,255,.035) 100%);
+    --glass-edge: rgba(255,255,255,.13);
+    --glass-top: rgba(255,255,255,.28);
+    --glass-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 4px 14px rgba(0,0,0,.35);
+  }
+  button.btn.secondary, select, input[type=text], input[type=number], .seg, .status-card,
+  .device, .effect-tile, .gif-cat, nav button[data-page].active {
+    border: 1px solid var(--glass-edge) !important; border-top-color: var(--glass-top) !important;
+  }
+  /* Glass buttons: translucent accent, top sheen, soft glow */
+  button.btn {
+    position: relative; cursor: pointer; font: 600 13px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; letter-spacing: .1px;
+    color: var(--on-accent); padding: 8px 16px; border-radius: 10px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.08) 46%, rgba(255,255,255,0) 54%),
+      color-mix(in srgb, var(--accent) 74%, transparent);
+    border: 1px solid rgba(255,255,255,.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0 -1px 0 rgba(0,0,0,.18), 0 6px 18px var(--accent-glow);
+    transition: transform .08s, box-shadow .15s, filter .15s;
+  }
+  button.btn:hover { filter: brightness(1.08) saturate(1.05); box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,0,0,.18), 0 8px 26px var(--accent-glow); }
+  button.btn:active { transform: translateY(1px); }
+  button.btn.secondary {
+    color: var(--text);
+    background: var(--glass-sheen), color-mix(in srgb, var(--accent) 12%, rgba(255,255,255,.04));
+    box-shadow: var(--glass-shadow);
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  button.btn.secondary:hover { filter: brightness(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 6px 18px var(--accent-soft); }
+  input[type=text], input[type=number], select {
+    background: var(--glass-sheen), rgba(255,255,255,.035); color: var(--text); box-shadow: var(--glass-shadow);
+    border-radius: 9px; padding: 7px 10px; font: 13px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; outline: none;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  select option { background: var(--panel2); }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent) var(--fill, 50%), var(--panel3) var(--fill, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; margin-top: -5.5px;
+    background: radial-gradient(circle at 35% 30%, #fff 0%, #f1f1f6 45%, #c9c9d4 100%); box-shadow: 0 0 0 3px var(--accent-soft), 0 2px 6px rgba(0,0,0,.45); cursor: pointer; }
+  input[type=range]:hover::-webkit-slider-thumb { background: var(--accent2); }
+  input[type=color] { width: 34px; height: 28px; border: none; background: none; cursor: pointer; padding: 0; }
+  label.field { display: block; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .toggle { position: relative; width: 38px; height: 20px; flex: none; }
+  .toggle input { display: none; }
+  .toggle span { position: absolute; inset: 0; background: var(--glass-sheen), rgba(255,255,255,.06); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top); border-radius: 20px; cursor: pointer; transition: 0.15s; box-shadow: inset 0 1px 2px rgba(0,0,0,.35); }
+  .toggle span::after { content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%; top: 2px; left: 2px; transition: 0.15s;
+    background: radial-gradient(circle at 35% 30%, #fff 0%, #f1f1f6 45%, #c9c9d4 100%); box-shadow: 0 1px 3px rgba(0,0,0,.45), inset 0 -1px 1px rgba(0,0,0,.15); }
+  .toggle input:checked + span { background: linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,0) 55%), var(--accent); border-color: rgba(255,255,255,.25); box-shadow: 0 0 12px var(--accent-glow); }
+  .toggle input:checked + span::after { left: 20px; }
+
+  .effect-tile { padding: 10px 8px 8px; border-radius: 12px; background: var(--glass-sheen), rgba(255,255,255,.03); box-shadow: var(--glass-shadow); cursor: pointer; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 13px; }
+  .effect-tile:hover { border-color: var(--muted); }
+  .effect-tile.selected { background: var(--glass-sheen), var(--accent-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 1px var(--accent), 0 0 20px var(--accent-soft); }
+  .effect-tile canvas { width: 58px; height: 58px; }
+  .fx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .fx-label { color: var(--muted); font-size: 12px; margin: 14px 0 8px; }
+  .fx-label:first-child { margin-top: 0; }
+
+  .gif-cats, .gif-grid { display: grid; gap: 10px; margin-top: 12px; flex: 1; min-height: 180px; overflow-y: auto; padding: 2px; }
+  /* categories: rows stretch so the 16 tiles fill the whole box */
+  .gif-cats { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); grid-auto-rows: minmax(96px, 1fr); }
+  .gif-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-content: start; }
+  .gif-cat { position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--panel2) center / cover no-repeat; box-shadow: var(--glass-shadow); min-height: 96px; }
+  .gif-cat::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: var(--glass-sheen); }
+  .gif-cat::after { content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); transition: background 0.15s; }
+  .gif-cat:hover::after { background: rgba(0, 0, 0, 0.25); }
+  .gif-cat span { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; text-shadow: 0 1px 4px #000; }
+  .gif-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
+  details.card > summary { cursor: pointer; list-style: none; user-select: none; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary h2 { display: inline-block; margin: 0; }
+  details.card > summary::before { content: '\25B8'; display: inline-block; width: 16px; color: var(--muted); transition: transform 0.15s; }
+  details.card[open] > summary::before { transform: rotate(90deg); }
+  details.card[open] > summary { margin-bottom: 12px; }
+
+  details.adv { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+  details.adv summary { cursor: pointer; color: var(--muted); font-size: 12px; list-style: none; user-select: none; }
+  details.adv summary::before { content: '\25B8'; display: inline-block; width: 14px; transition: transform 0.15s; }
+  details.adv[open] summary::before { transform: rotate(90deg); }
+  details.adv summary::-webkit-details-marker { display: none; }
+  .hint { color: #ffb547; }
+
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .set-row:last-child { border-bottom: none; }
+  .set-row > :last-child { flex: none; }
+  .seg button { white-space: nowrap; }
+  .set-row .lbl { font-size: 14px; }
+  .set-row .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .swatches { display: flex; gap: 8px; align-items: center; }
+  .swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+  .swatch.on { border-color: var(--text); }
+  .seg { display: inline-flex; gap: 3px; padding: 3px; border-radius: 11px; background: var(--glass-sheen), rgba(255,255,255,.03); box-shadow: var(--glass-shadow); }
+  .seg button { background: transparent; color: var(--muted); border: 1px solid transparent; padding: 5px 13px; border-radius: 8px; cursor: pointer; font: 600 12.5px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { color: var(--on-accent); border-color: rgba(255,255,255,.22);
+    background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%), color-mix(in srgb, var(--accent) 78%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 3px 12px var(--accent-glow); }
+  .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .theme-card { height: 64px; border-radius: 12px; border: 2px solid var(--border); cursor: pointer; text-align: left; padding: 0 14px;
+    color: #fff; font: 700 13.5px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.5); transition: transform .1s, border-color .15s; }
+  .theme-card:hover { transform: translateY(-1px); }
+  .theme-card.on { border-color: #fff; box-shadow: 0 0 16px rgba(255,255,255,.15); }
+
+  /* LCD page uses the whole window: controls on the left, the GIF browser
+     stretches to the bottom and its tiles grow to fill it. */
+  #page-lcd.visible { display: flex; flex-direction: column; overflow: hidden; }
+  #page-lcd .page-head { flex: none; }
+  .lcd-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: stretch; }
+  .lcd-layout > * { margin-bottom: 0; }
+  .lcd-side .lcd-preview { position: relative; width: 280px; height: 280px; margin: 4px auto 16px; border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--glass-edge), 0 0 34px var(--accent-soft); }
+  #lcdPreview { width: 280px; height: 280px; border-radius: 50%; border: 3px solid var(--border); background: #000; display: block; }
+  #lcdPreviewGif { display: none; position: absolute; inset: 0; width: 280px; height: 280px; border-radius: 50%; border: 3px solid var(--border); object-fit: cover; background: #000; }
+  .lcd-side .row .btn { flex: 1; }
+  .lcd-side { overflow-y: auto; }
+  .lcd-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
+  .lcd-main .card { margin: 0; }
+  .lcd-main .gif-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .lcd-main details.card { flex: none; max-height: 50%; overflow-y: auto; }
+  @media (max-width: 860px) { #page-lcd.visible { overflow-y: auto; } .lcd-layout { grid-template-columns: 1fr; } }
+  .msg { font-size: 12px; color: var(--muted); margin-top: 8px; white-space: pre-wrap; }
+  .msg.ok { color: #3ddc84; }
+  /* Peripherals - big, G HUB-style layout that fills the window */
+  #page-periph.visible { display: flex; flex-direction: column; }
+  .pdev-tabs { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .pdev-tab { display: flex; align-items: center; gap: 12px; padding: 12px 16px; min-width: 240px; border-radius: 14px; cursor: pointer;
+    background: var(--glass-sheen), rgba(255,255,255,.03); box-shadow: var(--glass-shadow); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top);
+    color: var(--text); text-align: left; font: inherit; }
+  .pdev-tab svg { width: 30px; height: 30px; stroke: var(--muted); fill: none; stroke-width: 1.6; }
+  .pdev-tab.on { background: var(--glass-sheen), var(--accent-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 1px var(--accent), 0 6px 20px var(--accent-soft); }
+  .pdev-tab.on svg { stroke: var(--accent); }
+  .pdev-tab b { display: block; font-size: 14px; }
+  .pdev-tab small { color: var(--muted); font-size: 12px; }
+  .pmouse { flex: 1 0 auto; display: grid; grid-template-columns: minmax(300px, 0.85fr) minmax(420px, 1.4fr); gap: 16px; }
+  .pmouse .card { margin: 0; }
+  .pm-hero { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding: 28px 18px; }
+  .pm-hero svg.mouse { width: min(230px, 60%); height: auto; filter: drop-shadow(0 18px 40px var(--accent-soft)); }
+  .pm-hero .big { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+  .pm-hero .big small { font-size: 18px; font-weight: 600; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
+  .pm-hero .stat { color: var(--muted); font-size: 14px; }
+  .pm-hero .ok-note { color: var(--muted); font-size: 12.5px; max-width: 300px; }
+  .pm-right { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  .pm-right .card h2 { font-size: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip-dpi { position: relative; min-width: 104px; padding: 14px 16px 12px; border-radius: 14px; cursor: pointer; text-align: center; font: inherit; color: var(--text);
+    background: var(--glass-sheen), rgba(255,255,255,.035); box-shadow: var(--glass-shadow); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top); }
+  .chip-dpi .v { font-size: 22px; font-weight: 750; display: block; }
+  .chip-dpi .l { font-size: 11px; color: var(--muted); letter-spacing: .5px; }
+  .chip-dpi.sel { background: var(--glass-sheen), var(--accent-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 2px var(--accent), 0 6px 20px var(--accent-soft); }
+  .chip-dpi.start .l { color: var(--accent); font-weight: 700; }
+  .chip-add { min-width: 104px; border-radius: 14px; border: 1.5px dashed var(--glass-top); background: transparent; color: var(--muted); font: 600 14px inherit; cursor: pointer; padding: 14px 16px; }
+  .chip-add:hover { color: var(--text); border-color: var(--accent); }
+  .dpi-editor { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .dpi-editor .top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .dpi-editor .stepbtn { width: 46px; height: 46px; padding: 0; font-size: 22px; border-radius: 12px; }
+  .dpi-editor input.dval { width: 140px; font-size: 28px; font-weight: 750; text-align: center; padding: 8px; border-radius: 12px; }
+  .dpi-editor .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  .dpi-editor .presets button { padding: 7px 12px; }
+  .dpi-editor input[type=range] { margin: 18px 0 6px; height: 26px; }
+  .dpi-editor .scale { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; }
+  .dpi-editor .acts { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .rates-big { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  .rate-btn { padding: 16px 10px; border-radius: 14px; cursor: pointer; text-align: center; font: inherit; color: var(--text);
+    background: var(--glass-sheen), rgba(255,255,255,.035); box-shadow: var(--glass-shadow); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top); }
+  .rate-btn b { display: block; font-size: 20px; }
+  .rate-btn small { color: var(--muted); font-size: 12px; }
+  .rate-btn.on { background: var(--glass-sheen), var(--accent-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 2px var(--accent), 0 6px 20px var(--accent-soft); }
+  .savebar { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 14px; margin-top: auto;
+    position: sticky; bottom: 12px; z-index: 5;
+    background: var(--glass-sheen), var(--panel2); box-shadow: 0 10px 30px rgba(0,0,0,.45), var(--glass-shadow); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top); }
+  .savebar .state { flex: 1; color: var(--muted); font-size: 13px; }
+  .savebar .state.dirty { color: #ffb547; font-weight: 600; }
+  .savebar .btn.save { padding: 11px 26px; font-size: 14px; }
+  /* Peripherals: sub-tabs, buttons, macros */
+  .psub { display: flex; gap: 8px; padding: 5px; border-radius: 14px; align-self: flex-start;
+    background: rgba(0,0,0,.18); border: 1px solid var(--border); }
+  .psub-btn { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; border: 0; cursor: pointer;
+    background: transparent; color: var(--muted); font: 600 14px inherit; }
+  .psub-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .psub-btn:hover { color: var(--text); }
+  .psub-btn.on { color: var(--text); background: var(--glass-sheen), var(--accent-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 0 0 1px var(--accent); }
+  .pview { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .pbtn-left { align-self: start; position: sticky; top: 0; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 24px 18px; }
+  .mouse-wrap { position: relative; width: min(220px, 62%); }
+  .mouse-wrap svg.mouse { width: 100%; height: auto; display: block; filter: drop-shadow(0 18px 40px var(--accent-soft)); }
+  .hot { position: absolute; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font: 700 13px inherit; color: var(--text); background: rgba(20,20,28,.85); border: 2px solid var(--glass-top); box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .hot:hover { border-color: var(--accent); }
+  .hot.on { background: var(--accent); border-color: #fff; color: #fff; box-shadow: 0 0 0 4px var(--accent-soft), 0 0 18px var(--accent); }
+  .btn-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+  .btn-row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+    text-align: left; font: inherit; color: var(--text); background: rgba(255,255,255,.03); border: 1px solid transparent; }
+  .btn-row:hover { background: rgba(255,255,255,.06); }
+  .btn-row.on { background: var(--glass-sheen), var(--accent-soft); border-color: var(--accent); }
+  .btn-row .num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: rgba(255,255,255,.08); }
+  .btn-row.on .num { background: var(--accent); color: #fff; }
+  .btn-row .nm { font-weight: 600; font-size: 13.5px; }
+  .btn-row .act { color: var(--muted); font-size: 12.5px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pbtn-right { display: flex; flex-direction: column; gap: 4px; }
+  .pb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .pb-title { font-size: 22px; font-weight: 750; }
+  .pb-warn { padding: 10px 14px; border-radius: 10px; background: rgba(255,181,71,.12); border: 1px solid rgba(255,181,71,.4); color: #ffcf85; font-size: 13px; margin: 4px 0 8px; }
+  .act-group { margin-top: 12px; }
+  .act-group h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .act-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
+  .act-tile { padding: 12px 12px; border-radius: 12px; cursor: pointer; text-align: left; font: inherit; color: var(--text); min-height: 48px;
+    background: var(--glass-sheen), rgba(255,255,255,.035); box-shadow: var(--glass-shadow); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top); }
+  .act-tile b { display: block; font-size: 13.5px; }
+  .act-tile small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .act-tile:hover { border-color: var(--accent); }
+  .act-tile.on { background: var(--glass-sheen), var(--accent-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 2px var(--accent), 0 6px 20px var(--accent-soft); }
+  .act-tile.add { border-style: dashed; background: transparent; box-shadow: none; }
+  .sniper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+  .sniper .snp.on, .modchip.on { background: var(--glass-sheen), var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+  .keyrow { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+  .keycap { flex: 1; min-width: 240px; padding: 14px 16px; border-radius: 12px; cursor: pointer; font-size: 15px; font-weight: 650; color: var(--muted);
+    border: 1.5px dashed var(--glass-top); background: rgba(0,0,0,.15); outline: none; }
+  .keycap:focus { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .keycap.on { color: var(--text); border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+  .keysel { min-width: 180px; }
+  .modrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .mac-layout { grid-template-columns: minmax(260px, 0.7fr) minmax(460px, 1.6fr); }
+  .mac-list { display: flex; flex-direction: column; gap: 8px; }
+  .mac-list-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .mac-list-head h2 { margin: 0; }
+  .mac-item { text-align: left; padding: 12px 14px; border-radius: 12px; cursor: pointer; font: inherit; color: var(--text);
+    background: rgba(255,255,255,.03); border: 1px solid transparent; }
+  .mac-item:hover { background: rgba(255,255,255,.06); }
+  .mac-item.on { background: var(--glass-sheen), var(--accent-soft); border-color: var(--accent); }
+  .mac-item b { display: block; font-size: 14px; }
+  .mac-item small { color: var(--muted); font-size: 12px; }
+  .mac-edit { display: flex; flex-direction: column; gap: 12px; }
+  .mac-head { display: flex; gap: 10px; }
+  .mac-name { flex: 1; font-size: 20px; font-weight: 700; padding: 10px 12px; border-radius: 10px; }
+  .mac-rec { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .rec-btn { padding: 12px 22px; font-size: 14px; }
+  .rec-btn.live { background: #e5484d; border-color: #e5484d; animation: recpulse 1.2s ease-in-out infinite; }
+  @keyframes recpulse { 50% { box-shadow: 0 0 0 6px rgba(229,72,77,.25); } }
+  .rec-hint { color: #ff8a8f; font-size: 13px; font-weight: 600; }
+  .toggle-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .steps { flex: 1; min-height: 200px; max-height: 50vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px;
+    border-radius: 12px; background: rgba(0,0,0,.18); border: 1px solid var(--border); }
+  .step { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; font-size: 13.5px; background: rgba(255,255,255,.04); }
+  .step .ico { width: 22px; text-align: center; font-weight: 800; }
+  .step.down .ico { color: var(--accent); }
+  .step.up .ico { color: var(--muted); }
+  .step.delay { color: var(--muted); background: transparent; padding: 3px 10px; }
+  .step.tap .ico { color: var(--accent); font-size: 10px; }
+  .step.tap b { font-weight: 650; }
+  .step .hold { color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+  .step .dms { width: 74px; padding: 3px 6px; font-size: 12.5px; }
+  .step .x { margin-left: auto; border: 0; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; }
+  .step .x:hover { color: #ff4d5e; }
+  .mac-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .mac-add .add-text-in { flex: 1; min-width: 160px; }
+  .mac-add .waiting { box-shadow: 0 0 0 2px var(--accent); }
+  .mac-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border); }
+  .meter { width: 120px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .meter div { height: 100%; background: var(--accent); }
+  .meter div.over { background: #ff4d5e; }
+  .bcats { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .bcat { position: relative; padding: 8px 14px; border-radius: 999px; cursor: pointer; font: 600 13px inherit; color: var(--muted);
+    background: rgba(255,255,255,.04); border: 1px solid var(--border); }
+  .bcat:hover { color: var(--text); border-color: var(--glass-top); }
+  .bcat.on { color: var(--text); background: var(--glass-sheen), var(--accent-soft); border-color: var(--accent); }
+  .bcat.has::after { content: ''; position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .bcat-body { min-height: 240px; }
+  .setup { margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent); font-size: 13.5px; }
+  .setup ol { margin: 8px 0 0 18px; padding: 0; display: grid; gap: 4px; }
+  .site-add { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .site-add .site-url { flex: 2; min-width: 200px; }
+  .site-add .site-name { flex: 1; min-width: 140px; }
+  .act-manage { margin-top: 14px; display: grid; gap: 6px; }
+  .am-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.03); font-size: 13px; }
+  .am-row span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .am-row .btn { padding: 5px 10px; font-size: 12px; }
+  /* Keyboard */
+  .kb-card { padding: 18px 20px; }
+  .kb-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .kbd { display: flex; flex-direction: column; gap: 6px; max-width: 1100px; margin: 0 auto; width: 100%; }
+  .krow { display: flex; gap: 6px; }
+  .krow.fnrow { margin-bottom: 8px; }
+  .kkey { flex: 0 0 calc((100% - 90px) / 16 * var(--w) + 6px * (var(--w) - 1)); height: 54px; border-radius: 9px; cursor: pointer; padding: 4px 6px;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; font: inherit; color: var(--text);
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); border: 1px solid var(--glass-edge); border-top-color: var(--glass-top);
+    box-shadow: 0 3px 0 rgba(0,0,0,.35); min-width: 0; overflow: hidden; }
+  .kkey:hover { border-color: var(--accent); }
+  .kkey .kl { font-size: clamp(9.5px, 0.95vw, 12.5px); font-weight: 650; white-space: nowrap; }
+  .kkey .ks { font-size: clamp(9px, 0.8vw, 10.5px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .kkey.sel { background: var(--glass-sheen), var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 3px 0 rgba(0,0,0,.35); }
+  .kkey.rt .ks { color: var(--accent); }
+  .kkey.changed { outline: 2px dashed #ffb547; outline-offset: -3px; }
+  .kkey.remapped .ks { color: var(--accent); font-weight: 600; }
+  .kkey.fnkey { opacity: .7; }
+  .bolt { font-style: normal; }
+  .kb-legend { display: flex; gap: 18px; justify-content: center; margin-top: 12px; color: var(--muted); font-size: 12px; }
+  .kb-legend .lg-changed { border: 2px dashed #ffb547; padding: 0 6px; border-radius: 6px; }
+  .kb-bottom { display: grid; grid-template-columns: minmax(420px, 1.6fr) minmax(260px, .8fr); gap: 16px; }
+  .kb-edit-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+  .kb-edit-head .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .kslide { margin-top: 14px; }
+  .kslide-top { display: flex; align-items: center; gap: 8px; }
+  .kslide-top b { font-size: 14px; }
+  .kslide-top .kval { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .kslide .knum { width: 84px; font-size: 16px; font-weight: 700; text-align: center; padding: 5px; }
+  .kslide .krange { margin-top: 8px; }
+  .kslides2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+  .mixed { font-size: 11px; color: #ffcf85; background: rgba(255,181,71,.14); padding: 1px 7px; border-radius: 999px; margin-left: 6px; }
+  .rt-row { display: flex; gap: 14px; align-items: center; margin-top: 18px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid var(--border); }
+  .switch { position: relative; width: 46px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; border-radius: 999px; background: rgba(255,255,255,.14); cursor: pointer; transition: .15s; }
+  .switch span::after { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: .15s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { left: 23px; }
+  .kdz { margin-top: 14px; }
+  .kb-rates { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
+  @media (max-width: 1050px) { .kb-bottom { grid-template-columns: 1fr; } .kslides2 { grid-template-columns: 1fr; } }
+  @media (max-width: 1050px) { .pmouse { grid-template-columns: 1fr; } }
+  .sub-h { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .3px; margin: 16px 0 4px; }
+  .msg.err { color: #ff4d5e; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand"><img src="../assets/icon.png" alt=""><span>RGB Studio</span></div>
+  <div class="status-card">
+    <div class="st"><span id="connDot" class="status-dot"></span><span id="connLabel">Connecting&hellip;</span></div>
+    <button class="btn secondary" id="btnConnect" style="padding:6px 12px">Reconnect</button>
+  </div>
+  <div class="section">LIGHTING</div>
+  <button data-page="devices" class="active"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Devices</button>
+  <button data-page="effects"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>Effects</button>
+  <button data-page="profiles"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Profiles</button>
+  <button data-page="periph"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>Peripherals</button>
+  <div class="section" id="navKrakenLabel">KRAKEN</div>
+  <button data-page="lcd"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg>Kraken LCD</button>
+  <div class="spacer"></div>
+  <button data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+</nav>
+
+<main>
+  <div class="titlebar"></div>
+  <div class="pages">
+
+  <!-- DEVICES -->
+  <section id="page-devices" class="page visible">
+    <div class="page-head"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><div><h1>Devices</h1><div class="sub">Everything RGB Studio found on this PC. Turn devices on or off and pick an effect for each.</div></div></div>
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn secondary" id="btnRefresh">Rescan</button>
+        <span class="msg" id="devMsg" style="margin:0">Connecting to devices&hellip;</span>
+      </div>
+      <div id="pawnioBanner" class="msg err" style="display:none; margin:0 0 12px">
+        RAM and motherboard lighting need the free PawnIO driver, which isn't installed on this PC.
+        Install it, restart the PC, then reopen RGB Studio.
+        <button class="btn secondary" id="pawnioGet" style="margin-left:8px">Get PawnIO</button>
+      </div>
+      <div class="grid" id="deviceGrid"></div>
+    </div>
+  </section>
+
+  <!-- EFFECTS -->
+  <section id="page-effects" class="page">
+    <div class="page-head"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><div><h1>Effects</h1><div class="sub">Pick a look, tune it, and apply it to every device at once.</div></div></div>
+    <div class="card">
+      <h2>Effect</h2>
+      <div id="effectTiles"></div>
+    </div>
+    <div class="card">
+      <h2>Adjust</h2>
+      <label class="field">Speed <input type="range" id="pSpeed" min="0" max="100" value="50"></label>
+      <label class="field">Brightness <input type="range" id="pBrightness" min="0" max="100" value="100"></label>
+      <label class="field">Scale &ndash; how many times the pattern repeats along each fan / strip (far left = whole device one color) <input type="range" id="pScale" min="0" max="100" value="50"></label>
+      <label class="field">Colors <span id="colorsNote" class="hint" style="display:none; margin-left:6px"></span></label>
+      <div class="row" id="colorRow">
+        <input type="color" value="#ff0000">
+        <button class="btn secondary" id="btnAddColor">+ color</button>
+        <button class="btn secondary" id="btnRemColor">− color</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btnApplyAll">Apply to all devices</button>
+        <span class="msg" id="fxMsg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- LCD -->
+  <section id="page-lcd" class="page">
+    <div class="page-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg><div><h1>Kraken LCD</h1><div class="sub">GIFs and images for the cooler screen, plus a live info overlay.</div></div></div>
+
+    <div class="lcd-layout">
+      <div class="card lcd-side" style="margin:0">
+        <h2>Kraken Elite LCD</h2>
+        <div class="lcd-preview">
+          <canvas id="lcdPreview" width="640" height="640"></canvas>
+          <img id="lcdPreviewGif">
+        </div>
+        <div class="row" style="margin-bottom:12px">
+          <button class="btn" id="btnLcdImage">Set image&hellip;</button>
+          <button class="btn" id="btnLcdGif">Play GIF&hellip;</button>
+        </div>
+        <label class="field">Brightness
+          <input type="range" id="lcdBrightness" min="0" max="100" value="80">
+        </label>
+        <div class="row" style="justify-content:space-between">
+          <label class="field" style="margin:0">Orientation
+            <select id="lcdOrientation">
+              <option value="0">0&deg;</option><option value="90">90&deg;</option>
+              <option value="180">180&deg;</option><option value="270">270&deg;</option>
+            </select>
+          </label>
+          <button class="btn secondary" id="btnLcdStatus" style="flex:none">Read status</button>
+        </div>
+        <div class="msg" id="lcdMsg">Pick a GIF or image for the Kraken screen. The pump ring is on the Devices page and follows your effects like everything else.</div>
+      </div>
+      <div class="lcd-main">
+          <div class="card gif-card">
+            <h2>GIFs</h2>
+            <div class="row">
+              <button class="btn secondary" id="gifBack" style="display:none; padding:7px 11px" title="Back to categories">&larr;</button>
+              <input type="text" id="giphyQ" placeholder="Search GIPHY&hellip;" style="flex:1">
+            </div>
+            <div id="gifCats" class="gif-cats"></div>
+            <div id="giphyGrid" class="gif-grid" style="display:none"></div>
+            <div class="msg" id="giphyMsg"></div>
+          </div>
+          <details class="card">
+            <summary><h2>Advanced</h2></summary>
+            <div class="msg" style="margin:0 0 10px">Draw live info (temperatures, pump speed, clock, your own text) on top of the LCD.</div>
+            <div class="row">
+              <label class="toggle"><input type="checkbox" id="sensorToggle"><span></span></label>
+              <span>Overlay on LCD</span>
+              <select id="ovInterval">
+                <option value="2000">update 2 s</option>
+                <option value="3000" selected>update 3 s</option>
+                <option value="5000">update 5 s</option>
+              </select>
+              <label class="toggle"><input type="checkbox" id="sensorBg" checked><span></span></label>
+              <span>Media background</span>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <select id="ovAdd">
+                <option value="metric">Metric value</option>
+                <option value="gauge">Gauge ring</option>
+                <option value="text">Custom text</option>
+                <option value="clock">Clock</option>
+                <option value="date">Date</option>
+              </select>
+              <button class="btn secondary" id="btnOvAdd">+ Add</button>
+              <button class="btn secondary" id="btnOvDel">Remove</button>
+              <span class="msg" id="ovMsg" style="margin:0">Click an element on the preview to select it, drag to move.</span>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <label class="field" style="margin:0">Metric
+                <select id="ovMetric">
+                  <option value="liquid">Liquid °C</option>
+                  <option value="pump">Pump RPM</option>
+                  <option value="cpu">CPU °C</option>
+                  <option value="gpu">GPU °C</option>
+                </select>
+              </label>
+              <label class="field" style="margin:0; flex:1; min-width:160px">Text
+                <input type="text" id="ovText" style="width:100%" placeholder="{cpu} {gpu} {liquid} {pump} {time} {date}">
+              </label>
+              <label class="field" style="margin:0">Size
+                <input type="range" id="ovSize" min="20" max="300" value="100" style="width:110px">
+              </label>
+              <label class="field" style="margin:0">Color
+                <input type="color" id="ovColor" value="#ffffff">
+              </label>
+            </div>
+          </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROFILES -->
+  <section id="page-profiles" class="page">
+    <div class="page-head"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><div><h1>Profiles</h1><div class="sub">Save your whole setup and switch between looks in one click.</div></div></div>
+    <div class="card">
+      <h2>Saved profiles</h2>
+      <div class="row" style="margin-bottom:12px">
+        <input type="text" id="profileName" placeholder="Profile name">
+        <button class="btn" id="btnSaveProfile">Save current setup</button>
+      </div>
+      <div id="profileList" class="row"></div>
+      <div class="msg" id="profMsg"></div>
+    </div>
+  </section>
+
+  <!-- PERIPHERALS -->
+  <section id="page-periph" class="page">
+    <div class="page-head"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg><div><h1>Peripherals</h1><div class="sub">Mouse and keyboard settings, saved in the device's own memory &ndash; they keep working with nothing running, on any PC.</div></div></div>
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn secondary" id="btnPeriphScan">Look for devices</button>
+      <span class="msg" id="periphMsg" style="margin:0"></span>
+    </div>
+    <div class="pdev-tabs" id="periphTabs"></div>
+    <div id="periphGrid" style="flex:1 0 auto; display:flex; flex-direction:column"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="page-settings" class="page">
+    <div class="page-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><div><h1>Settings</h1><div class="sub">Appearance, startup and lighting.</div></div></div>
+
+    <div class="card">
+      <h2>Appearance</h2>
+      <div class="themes" id="setTheme"></div>
+    </div>
+
+    <div class="card">
+      <h2>Startup</h2>
+      <div class="set-row">
+        <div>
+          <div class="lbl">Start with Windows</div>
+          <div class="sub">Opens hidden in the tray when you log in, with admin rights and no prompt.</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="setAutoStart"><span></span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Lighting</h2>
+      <div class="set-row">
+        <div>
+          <div class="lbl">RAM refresh rate</div>
+          <div class="sub">30 fps is fine for most memory. Only lower it if RAM lighting stutters or freezes &ndash; and close tools like HWiNFO that also use the memory bus.</div>
+        </div>
+        <select id="setDramFps">
+          <option value="33">30 fps</option>
+          <option value="66">15 fps</option>
+          <option value="125">8 fps</option>
+          <option value="250">4 fps</option>
+        </select>
+      </div>
+      <div class="set-row kraken-only">
+        <div>
+          <div class="lbl">Kraken pump ring</div>
+          <div class="sub">Live: every ring LED follows your effect in step with your other devices, using the same live-frame method as NZXT CAM. Cooler's own: the cooler plays its built-in animation with your colors and speed &ndash; use it if Live ever stutters; it can drift from the rest.</div>
+        </div>
+        <div class="seg" id="setRingMode">
+          <button data-v="live">Live</button><button data-v="smooth">Cooler's own</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>GIF search</h2>
+      <div class="set-row">
+        <div>
+          <div class="lbl">GIPHY API key</div>
+          <div class="sub">Used by the Kraken LCD's GIF picker. Get a free key at developers.giphy.com. Leave empty to use the one built into your copy.</div>
+        </div>
+        <input type="text" id="setGiphyKey" placeholder="Paste key" spellcheck="false" style="width:260px">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>About</h2>
+      <div class="set-row">
+        <div>
+          <div class="lbl">RGB Studio <span id="appVersion" class="msg"></span></div>
+          <div class="sub" id="aboutKraken"></div>
+        </div>
+        <button class="btn secondary" id="btnOpenLogs">Open logs folder</button>
+      </div>
+    </div>
+  </section>
+  </div>
+</main>
+
+<script src="../effects.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+// Device / zone names come from hardware (OpenRGB) — escape before putting
+// them into innerHTML.
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let devices = [], deviceState = {}, effects = [], selectedEffect = 'rainbowWave';
+let sensorTimer = null;
+let hwInfo = { kraken: null, krakenBootloader: false, monsgeek: null };
+
+// ---- Navigation ----
+document.querySelectorAll('nav button[data-page]').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('nav button[data-page]').forEach((x) => x.classList.remove('active'));
+    document.querySelectorAll('.page').forEach((p) => p.classList.remove('visible'));
+    b.classList.add('active');
+    $('#page-' + b.dataset.page).classList.add('visible');
+  };
+});
+
+// ---- Connection ----
+const devCountLabel = () => 'Connected \u00b7 ' + devices.length + (devices.length === 1 ? ' device' : ' devices');
+$('#btnConnect').onclick = async () => {
+  $('#connLabel').textContent = 'Connecting…';
+  const r = await window.rgb.connect('127.0.0.1', 6742);
+  if (r.ok) {
+    devices = r.devices; deviceState = r.state;
+    $('#connDot').classList.add('on');
+    $('#connLabel').textContent = devCountLabel();
+    $('#devMsg').textContent = '';
+    renderDevices();
+    syncEffectsUiFromState();
+  } else {
+    $('#connLabel').textContent = 'Failed';
+    $('#devMsg').textContent = 'Could not connect: ' + r.error;
+  }
+};
+
+window.rgb.onDevicesUpdated(({ devices: d, state: s }) => {
+  devices = d; deviceState = s;
+  $('#connLabel').textContent = devCountLabel();
+  renderDevices();
+  syncEffectsUiFromState();
+});
+
+window.rgb.onConnLost(() => {
+  $('#connDot').classList.remove('on');
+  $('#connLabel').textContent = 'Reconnecting\u2026';
+});
+
+window.rgb.onConnRestored(({ devices: d, state: s }) => {
+  devices = d; deviceState = s;
+  $('#connDot').classList.add('on');
+  $('#connLabel').textContent = devCountLabel();
+  renderDevices();
+});
+
+$('#btnRefresh').onclick = async () => {
+  const r = await window.rgb.refresh();
+  if (r.ok) { devices = r.devices; deviceState = r.state; renderDevices(); }
+  else $('#devMsg').textContent = r.error;
+};
+
+// ---- Devices page ----
+// Each card shows just the essentials (on/off + effect). LED counts and refresh
+// live in a collapsed "LED setup" section: OpenRGB already reports the LED
+// counts of every device that can tell it; only plain ARGB headers can't
+// (the header has no wire back), so those are the only ones you'd ever set.
+const advOpen = new Set(); // device ids whose LED setup is expanded (survives re-renders)
+
+function deviceMeta(d) {
+  if (d.kraken) {
+    return appSettings.krakenRingMode === 'smooth'
+      ? 'Cooler\'s own animation with your colors & speed (Settings › Kraken pump ring)'
+      : d.ledCount + ' LEDs \u2014 in sync with your other devices';
+  }
+  if (d.monsgeek) return 'Whole keyboard follows the effect color, in sync (wired only)';
+  const unset = d.zones.filter((z) => z.resizable && !z.ledsCount && !z.fmt);
+  if (d.ledCount === 0 && unset.length) return '<span class="hint">Set the LED count under LED setup to light this up</span>';
+  return d.ledCount + ' LEDs';
+}
+
+function renderDevices() {
+  const grid = $('#deviceGrid');
+  grid.innerHTML = '';
+  cardPreviews.length = 0;
+  for (const d of devices) {
+    const st = deviceState[d.id] || {};
+    const el = document.createElement('div');
+    el.className = 'device';
+    const resizable = d.zones.filter((z) => z.resizable);
+    const hasAdv = !d.kraken && !d.monsgeek;
+    el.innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <div class="name">${esc(d.name)}</div>
+        <label class="toggle"><input type="checkbox" ${st.enabled ? 'checked' : ''}><span></span></label>
+      </div>
+      <div class="meta">${deviceMeta(d)}</div>
+      <canvas class="ledbar"></canvas>
+      <select class="fxSel">
+        ${effects.map((e) => `<option value="${esc(e.id)}" ${st.effectId === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}
+      </select>
+      ${hasAdv ? `
+      <details class="adv" ${advOpen.has(d.id) ? 'open' : ''}>
+        <summary>${resizable.length ? 'LED setup' : 'Advanced'}</summary>
+        <div class="zones"></div>
+        <div class="row" style="margin-top:6px">
+          <span class="meta" style="margin:0;flex:1">Refresh rate</span>
+          <select class="fpsSel" style="width:auto;margin:0">
+            <option value="0" ${!st.fpsGap ? 'selected' : ''}>Auto</option>
+            <option value="33" ${st.fpsGap === 33 ? 'selected' : ''}>30 fps</option>
+            <option value="66" ${st.fpsGap === 66 ? 'selected' : ''}>15 fps</option>
+            <option value="125" ${st.fpsGap === 125 ? 'selected' : ''}>8 fps</option>
+            <option value="250" ${st.fpsGap === 250 ? 'selected' : ''}>4 fps</option>
+          </select>
+        </div>
+      </details>` : ''}`;
+    el.querySelector('input[type=checkbox]').onchange = (ev) => {
+      deviceState[d.id].enabled = ev.target.checked;
+      window.rgb.setDeviceState(d.id, { enabled: ev.target.checked });
+    };
+    el.querySelector('.fxSel').onchange = (ev) => {
+      deviceState[d.id].effectId = ev.target.value;
+      window.rgb.setDeviceState(d.id, { effectId: ev.target.value });
+    };
+    const adv = el.querySelector('details.adv');
+    if (adv) {
+      adv.ontoggle = () => { if (adv.open) advOpen.add(d.id); else advOpen.delete(d.id); };
+      adv.querySelector('.fpsSel').onchange = (ev) => {
+        const gap = +ev.target.value || null;
+        deviceState[d.id].fpsGap = gap;
+        window.rgb.setDeviceState(d.id, { fpsGap: gap });
+      };
+      const zonesEl = adv.querySelector('.zones');
+      for (const z of resizable) zonesEl.appendChild(zoneRow(d, z));
+    }
+    grid.appendChild(el);
+    const cv = el.querySelector('.ledbar');
+    cardPreviews.push({ d, cv, ctx: cv.getContext('2d') });
+  }
+}
+
+// Live preview bar on each device card: that device's effect, rendered by the
+// same engine (one dot per LED, up to 40). Runs only while Devices is open.
+const cardPreviews = [];
+let cardLast = 0;
+const cardStart = performance.now();
+function drawCardPreviews(now) {
+  requestAnimationFrame(drawCardPreviews);
+  if (!$('#page-devices').classList.contains('visible') || now - cardLast < 40) return;
+  cardLast = now;
+  const t = (now - cardStart) / 1000;
+  for (const p of cardPreviews) {
+    if (!p.cv.isConnected) continue;
+    const st = deviceState[p.d.id] || {};
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.round(p.cv.clientWidth * dpr), H = Math.round(p.cv.clientHeight * dpr);
+    if (!W || !H) continue;
+    if (p.cv.width !== W || p.cv.height !== H) { p.cv.width = W; p.cv.height = H; }
+    const uniform = p.d.monsgeek;
+    const n = Math.max(1, Math.min(40, p.d.ledCount || 12));
+    const params = uniform ? { ...(st.params || {}), scale: 0 } : st.params;
+    let leds = [];
+    try { leds = st.enabled ? window.RGBEffects.renderEffect(st.effectId, t, n, params, 'card-' + p.d.id, { ring: !!p.d.kraken }) : []; } catch (_) {}
+    const c = p.ctx;
+    c.clearRect(0, 0, W, H);
+    const step = W / n, r = Math.min(step * 0.34, H * 0.28);
+    for (let i = 0; i < n; i++) {
+      const col = leds[i];
+      const x = step * (i + 0.5), y = H / 2;
+      const css = col ? `rgb(${col.red},${col.green},${col.blue})` : 'rgba(255,255,255,.08)';
+      c.shadowColor = css;
+      c.shadowBlur = col ? r * 2.4 : 0;
+      c.fillStyle = css;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    }
+    c.shadowBlur = 0;
+  }
+}
+requestAnimationFrame(drawCardPreviews);
+
+// One header/channel: LED count + LED type (RGB / RGBW variants). Changes
+// apply as soon as you leave the box / press Enter, or pick a type.
+function zoneRow(d, z) {
+  const row = document.createElement('div');
+  row.className = 'zrow';
+  const fmt = z.fmt ? z.fmt.format : 'rgb';
+  row.innerHTML = `
+    <span class="meta" title="${esc(z.name)}">${esc(z.name)}</span>
+    <input type="number" min="${z.ledsMin}" max="${z.ledsMax || 300}" value="${z.fmt ? z.fmt.physical : z.ledsCount}" title="Number of LEDs plugged into this header">
+    <select class="fmtSel" title="LED type. Pick RGBW if this strip shows a whitish, jumbled mess (e.g. some GPU light bars). If colors are then clean but red/green swapped, pick 'RGBW R/G'; if still jumbled, try 'RGBW alt'.">
+      <option value="rgb" ${fmt === 'rgb' ? 'selected' : ''}>RGB</option>
+      <option value="rgbw" ${fmt === 'rgbw' ? 'selected' : ''}>RGBW</option>
+      <option value="rgbw-rg" ${fmt === 'rgbw-rg' ? 'selected' : ''}>RGBW R/G</option>
+      <option value="rgbw-alt" ${fmt === 'rgbw-alt' ? 'selected' : ''}>RGBW alt</option>
+    </select>
+    ${z.fmt ? `<span class="meta note">${z.fmt.physical} RGBW LEDs (sent as ${z.ledsCount} header slots)</span>` : ''}`;
+  // RGBW needs the real LED count (the app sizes the header itself); RGB is a plain resize.
+  const input = row.querySelector('input');
+  const apply = async () => {
+    const count = Math.max(0, Math.round(+input.value || 0));
+    const format = row.querySelector('.fmtSel').value;
+    const current = z.fmt ? z.fmt.physical : z.ledsCount;
+    if (count === current && format === fmt) return;
+    input.disabled = true;
+    const r = (format === 'rgb' && !z.fmt)
+      ? await window.rgb.resizeZone(d.id, z.id, count)
+      : await window.rgb.setZoneFormat(d.id, z.id, format, count);
+    if (r.ok) { devices = r.devices; deviceState = r.state; renderDevices(); }
+    else { input.disabled = false; alert('Could not apply: ' + r.error); }
+  };
+  input.onchange = apply;
+  input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
+  row.querySelector('.fmtSel').onchange = apply;
+  return row;
+}
+
+// ---- Effects page ----
+// Every tile has a little ring of 16 LEDs playing that effect with your current
+// speed / scale / colors - rendered by the same engine the devices use.
+async function initEffects() {
+  effects = await window.rgb.listEffects();
+  const tiles = $('#effectTiles');
+  tiles.innerHTML = '';
+  fxTiles.length = 0;
+  // Two groups: animated effects, then the still ones (Gradient, Static).
+  const groups = {};
+  for (const [key, label] of [['moving', 'Animated'], ['still', 'Still']]) {
+    if (!effects.some((e) => (key === 'still') === !!e.still)) continue;
+    const l = document.createElement('div');
+    l.className = 'fx-label';
+    l.textContent = label;
+    const g = document.createElement('div');
+    g.className = 'fx-grid';
+    tiles.append(l, g);
+    groups[key] = g;
+  }
+  for (const e of effects) {
+    const t = document.createElement('div');
+    t.className = 'effect-tile' + (e.id === selectedEffect ? ' selected' : '');
+    t.dataset.id = e.id;
+    t.title = e.desc || '';
+    const cv = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(58 * dpr);
+    cv.height = Math.round(58 * dpr);
+    const name = document.createElement('div');
+    name.textContent = e.name;
+    t.append(cv, name);
+    t.onclick = () => {
+      selectedEffect = e.id;
+      updateColorsNote();
+      tiles.querySelectorAll('.effect-tile').forEach((x) => x.classList.remove('selected'));
+      t.classList.add('selected');
+    };
+    groups[e.still ? 'still' : 'moving'].appendChild(t);
+    fxTiles.push({ id: e.id, ctx: cv.getContext('2d'), size: cv.width });
+  }
+}
+
+const fxTiles = [];
+const FX_LEDS = 16;
+const fxStart = performance.now();
+let fxLast = 0;
+function drawFxTiles(now) {
+  requestAnimationFrame(drawFxTiles);
+  if (!$('#page-effects').classList.contains('visible') || now - fxLast < 33) return;
+  fxLast = now;
+  const t = (now - fxStart) / 1000;
+  const params = currentParams();
+  for (const f of fxTiles) {
+    const leds = window.RGBEffects.renderEffect(f.id, t, FX_LEDS, params, 'tile-' + f.id, { ring: true });
+    const c = f.ctx, S = f.size, R = S * 0.36, r = S * 0.065;
+    c.clearRect(0, 0, S, S);
+    c.fillStyle = '#0b0b0f';
+    c.beginPath(); c.arc(S / 2, S / 2, S / 2 - 1, 0, Math.PI * 2); c.fill();
+    leds.forEach((col, i) => {
+      const a = (i / FX_LEDS) * Math.PI * 2 + Math.PI / 2; // LED 0 at the bottom (fire rises)
+      const x = S / 2 + Math.cos(a) * R, y = S / 2 + Math.sin(a) * R;
+      const css = `rgb(${col.red},${col.green},${col.blue})`;
+      c.shadowColor = css;
+      c.shadowBlur = r * 2.2;
+      c.fillStyle = css;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    });
+    c.shadowBlur = 0;
+  }
+}
+requestAnimationFrame(drawFxTiles);
+
+// Some effects have fixed colors (rainbow, fire) - say so instead of letting
+// the color pickers look broken.
+function updateColorsNote() {
+  const e = effects.find((x) => x.id === selectedEffect);
+  const note = $('#colorsNote');
+  const off = !!(e && e.noColors);
+  note.style.display = off ? '' : 'none';
+  note.textContent = off ? `${e.name} doesn't use these \u2014 pick Color Cycle or Color Shift Wave for your colors` : '';
+  $('#colorRow').style.opacity = off ? '0.45' : '';
+}
+
+function currentParams() {
+  return {
+    speed: +$('#pSpeed').value,
+    brightness: +$('#pBrightness').value,
+    scale: +$('#pScale').value,
+    colors: [...document.querySelectorAll('#colorRow input[type=color]')].map((i) => i.value),
+  };
+}
+
+$('#btnAddColor').onclick = () => {
+  effectsUiTouched = true;
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.value = '#00d4aa';
+  $('#colorRow').insertBefore(inp, $('#btnAddColor'));
+};
+$('#btnRemColor').onclick = () => {
+  effectsUiTouched = true;
+  const inputs = document.querySelectorAll('#colorRow input[type=color]');
+  if (inputs.length > 1) inputs[inputs.length - 1].remove();
+};
+
+$('#btnApplyAll').onclick = async () => {
+  await window.rgb.applyAll({ effectId: selectedEffect, params: currentParams() });
+  for (const id of Object.keys(deviceState)) {
+    deviceState[id].effectId = selectedEffect;
+    deviceState[id].params = { ...(deviceState[id].params || {}), ...currentParams() };
+  }
+  renderDevices();
+  $('#fxMsg').textContent = 'Applied.';
+  setTimeout(() => ($('#fxMsg').textContent = ''), 1500);
+};
+
+// Live param updates. Each slider sends ONLY its own value. (It used to send
+// every param incl. colors — and since the page starts at defaults, nudging a
+// slider after a restart repainted every device red.)
+const SLIDER_PARAMS = { pSpeed: 'speed', pBrightness: 'brightness', pScale: 'scale' };
+for (const [id, key] of Object.entries(SLIDER_PARAMS)) {
+  $('#' + id).oninput = () => {
+    effectsUiTouched = true;
+    const val = +$('#' + id).value;
+    window.rgb.applyAll({ params: { [key]: val } });
+    for (const sid of Object.keys(deviceState)) {
+      deviceState[sid].params = { ...(deviceState[sid].params || {}), [key]: val };
+    }
+  };
+}
+
+// Load the Effects page controls from the CURRENT setup (the most common
+// effect across devices) so the page reflects reality after a restart instead
+// of factory defaults. Skipped once the user starts editing the page.
+let effectsUiTouched = false;
+function syncEffectsUiFromState(force) {
+  if (effectsUiTouched && !force) return;
+  const counts = {};
+  let best = null;
+  for (const d of devices) {
+    const st = deviceState[d.id];
+    if (!st || !st.effectId) continue;
+    counts[st.effectId] = (counts[st.effectId] || 0) + 1;
+    if (!best || counts[st.effectId] > counts[best.effectId]) best = st;
+  }
+  if (!best) return;
+  selectedEffect = best.effectId;
+  updateColorsNote();
+  document.querySelectorAll('#effectTiles .effect-tile').forEach((t) => {
+    t.classList.toggle('selected', t.dataset.id === selectedEffect);
+  });
+  const p = best.params || {};
+  if (p.speed != null) $('#pSpeed').value = p.speed;
+  if (p.brightness != null) $('#pBrightness').value = p.brightness;
+  if (p.scale != null) $('#pScale').value = p.scale;
+  if (Array.isArray(p.colors) && p.colors.length) {
+    document.querySelectorAll('#colorRow input[type=color]').forEach((i) => i.remove());
+    for (const c of p.colors) {
+      const inp = document.createElement('input');
+      inp.type = 'color';
+      inp.value = /^#[0-9a-f]{6}$/i.test(c) ? c : '#ff0000';
+      $('#colorRow').insertBefore(inp, $('#btnAddColor'));
+    }
+  }
+}
+$('#colorRow').addEventListener('input', () => { effectsUiTouched = true; });
+$('#effectTiles').addEventListener('click', () => { effectsUiTouched = true; });
+
+// ---- LCD page ----
+function lcdMsg(text, err) {
+  const m = $('#lcdMsg');
+  m.textContent = text;
+  m.className = 'msg' + (err ? ' err' : '');
+}
+
+// The media currently on (or destined for) the LCD: { type: 'image'|'gif', path }.
+// Used as the overlay background and to restore native GIF playback afterwards.
+let lastMedia = null;
+let bgImage = null;   // preloaded Image element for overlay compositing
+
+function setLastMedia(type, path) {
+  lastMedia = { type, path };
+  bgImage = new Image();
+  bgImage.src = 'file:///' + path.replace(/\\/g, '/'); // for GIFs canvas uses frame 1
+  window.rgb.setSettings({ lcdMedia: lastMedia });     // survive restarts
+}
+
+function showGifPreview(path) {
+  $('#lcdPreviewGif').src = 'file:///' + path.replace(/\\/g, '/');
+  $('#lcdPreviewGif').style.display = 'block';   // animated <img> preview
+}
+function hideGifPreview() {
+  $('#lcdPreviewGif').style.display = 'none';
+}
+
+$('#btnLcdImage').onclick = async () => {
+  if ($('#sensorToggle').checked) { $('#sensorToggle').checked = false; stopSensor(); }
+  const r = await window.rgb.lcd.pickImage();
+  if (r.ok) {
+    lcdMsg((r.path.toLowerCase().endsWith('.gif') ? 'Playing on the LCD: ' : 'Image sent to LCD: ') + r.path);
+    setLastMedia(r.path.toLowerCase().endsWith('.gif') ? 'gif' : 'image', r.path);
+    if (lastMedia.type === 'gif') showGifPreview(r.path);
+    else { hideGifPreview(); drawPreviewImage(r.path); }
+  } else if (r.error !== 'canceled') lcdMsg(r.error, true);
+};
+
+$('#btnLcdStatus').onclick = async () => {
+  const r = await window.rgb.lcd.status();
+  lcdMsg(r.ok ? r.result.raw : r.error, !r.ok);
+};
+
+$('#lcdBrightness').onchange = async (e) => {
+  const r = await window.rgb.lcd.brightness(+e.target.value);
+  if (!r.ok) lcdMsg(r.error, true);
+};
+
+$('#lcdOrientation').onchange = async (e) => {
+  const r = await window.rgb.lcd.orientation(+e.target.value);
+  if (!r.ok) lcdMsg(r.error, true);
+};
+
+function drawPreviewImage(path) {
+  const ctx = $('#lcdPreview').getContext('2d');
+  const img = new Image();
+  img.onload = () => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 640, 640); ctx.drawImage(img, 0, 0, 640, 640); };
+  img.src = 'file:///' + path.replace(/\\/g, '/');
+}
+
+// ---- LCD overlay editor (nzxt-esc style: draggable layers over your media) ----
+// The panel shows exactly one asset at a time, so overlay mode renders frames:
+// media background (GIF = first frame) + live elements, pushed only on change.
+const OV_KEY = 'lcdOverlayLayout.v1';
+let overlaySel = null;
+let sensorsCache = { cpu: null, gpu: null, liquid: null, pump: null };
+let lastOverlayKey = '';
+
+function defaultOverlay() {
+  return { elements: [
+    { type: 'gauge',  metric: 'liquid', x: 320, y: 320, size: 270, color: '#7c5cff', max: 60 },
+    { type: 'metric', metric: 'liquid', x: 320, y: 350, size: 150, color: '#ffffff' },
+    { type: 'text',   text: 'LIQUID',   x: 320, y: 440, size: 48,  color: '#7c5cff' },
+  ] };
+}
+let overlayCfg = (() => {
+  try { return JSON.parse(localStorage.getItem(OV_KEY)) || defaultOverlay(); }
+  catch (_) { return defaultOverlay(); }
+})();
+function saveOverlay() { localStorage.setItem(OV_KEY, JSON.stringify(overlayCfg)); }
+
+function metricText(m) {
+  const v = sensorsCache[m];
+  if (v == null) return '--';
+  if (m === 'pump') return Math.round(v) + ' rpm';
+  return (+v).toFixed(m === 'liquid' ? 1 : 0) + '°';
+}
+function nowTime() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+function nowDate() { return new Date().toLocaleDateString(); }
+function elementText(el) {
+  if (el.type === 'metric') return metricText(el.metric);
+  if (el.type === 'clock') return nowTime();
+  if (el.type === 'date') return nowDate();
+  if (el.type === 'text') {
+    return (el.text || '').replace(/\{(cpu|gpu|liquid|pump|time|date)\}/gi, (_, k) => {
+      k = k.toLowerCase();
+      if (k === 'time') return nowTime();
+      if (k === 'date') return nowDate();
+      return metricText(k);
+    });
+  }
+  return '';
+}
+
+function elementBounds(ctx, el) {
+  if (el.type === 'gauge') {
+    return { x: el.x - el.size - 12, y: el.y - el.size - 12, w: el.size * 2 + 24, h: el.size * 2 + 24 };
+  }
+  ctx.font = `bold ${el.size}px Segoe UI, sans-serif`;
+  const w = Math.max(50, ctx.measureText(elementText(el)).width);
+  return { x: el.x - w / 2 - 8, y: el.y - el.size - 6, w: w + 16, h: el.size + 20 };
+}
+
+function drawOverlay(ctx, forPreview) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 640, 640);
+  if ($('#sensorBg').checked && bgImage && bgImage.complete && bgImage.naturalWidth) {
+    ctx.drawImage(bgImage, 0, 0, 640, 640);
+    const grad = ctx.createRadialGradient(320, 340, 60, 320, 340, 260);
+    grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 640, 640);
+  }
+  for (const el of overlayCfg.elements) {
+    if (el.type === 'gauge') {
+      const v = sensorsCache[el.metric];
+      const frac = v == null ? 0 : Math.min(1, Math.max(0, (v - 20) / ((el.max || 60) - 20)));
+      ctx.strokeStyle = el.color;
+      ctx.lineWidth = 14;
+      ctx.beginPath();
+      ctx.arc(el.x, el.y, el.size, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+      ctx.beginPath();
+      ctx.arc(el.x, el.y, el.size, -Math.PI / 2 + frac * Math.PI * 2, Math.PI * 1.5);
+      ctx.stroke();
+    } else {
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = el.color;
+      ctx.font = `bold ${el.size}px Segoe UI, sans-serif`;
+      ctx.fillText(elementText(el), el.x, el.y);
+      ctx.shadowBlur = 0;
+    }
+    if (forPreview && el === overlaySel) {
+      const b = elementBounds(ctx, el);
+      ctx.strokeStyle = '#00d4aa';
+      ctx.setLineDash([10, 8]);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+function redrawPreview() {
+  drawOverlay($('#lcdPreview').getContext('2d'), true);
+}
+
+async function refreshSensorValues() {
+  try {
+    const st = await window.rgb.lcd.status();
+    if (st.ok) {
+      const tKey = Object.keys(st.result).find((k) => /liquid temperature/i.test(k));
+      if (tKey) sensorsCache.liquid = st.result[tKey].value;
+      const pKey = Object.keys(st.result).find((k) => /pump speed/i.test(k));
+      if (pKey) sensorsCache.pump = st.result[pKey].value;
+    }
+  } catch (_) {}
+  try {
+    const pc = await window.rgb.sensors();
+    if (pc) { sensorsCache.cpu = pc.cpu; sensorsCache.gpu = pc.gpu; }
+  } catch (_) {}
+}
+
+async function sensorTick() {
+  await refreshSensorValues();
+  const canvas = $('#lcdPreview');
+  const ctx = canvas.getContext('2d');
+  // Anti-flicker (same trick as the Rust port): only push when what the LCD
+  // would SHOW actually changed — no re-push means zero animation hitch.
+  const key = JSON.stringify(overlayCfg.elements.map((el) =>
+    [el.type, el.x, el.y, el.size, el.color, elementText(el)]))
+    + '|' + $('#sensorBg').checked + '|' + (lastMedia ? lastMedia.path : '');
+  if (key !== lastOverlayKey) {
+    drawOverlay(ctx, false); // clean frame, no selection marker
+    const r = await window.rgb.lcd.pushFrame(canvas.toDataURL('image/png'));
+    if (!r.ok) {
+      lcdMsg('Overlay failed: ' + r.error, true);
+      $('#sensorToggle').checked = false;
+      stopSensor();
+      return;
+    }
+    lastOverlayKey = key;
+  }
+  redrawPreview();
+}
+
+// ---- editor interactions ----
+function syncProps() {
+  const el = overlaySel;
+  $('#ovMetric').disabled = !el || (el.type !== 'metric' && el.type !== 'gauge');
+  $('#ovText').disabled = !el || el.type !== 'text';
+  $('#ovSize').disabled = !el;
+  $('#ovColor').disabled = !el;
+  $('#ovMsg').textContent = el
+    ? `Selected: ${el.type}${el.metric ? ' (' + el.metric + ')' : ''} — drag on preview to move.`
+    : 'Click an element on the preview to select it, drag to move.';
+  if (!el) return;
+  if (el.metric) $('#ovMetric').value = el.metric;
+  $('#ovText').value = el.text || '';
+  $('#ovSize').value = el.size;
+  $('#ovColor').value = el.color;
+}
+
+(function initOverlayEditor() {
+  const canvas = $('#lcdPreview');
+  let dragging = null, offX = 0, offY = 0;
+  const toCanvas = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (640 / r.width), y: (e.clientY - r.top) * (640 / r.height) };
+  };
+  canvas.addEventListener('mousedown', (e) => {
+    const p = toCanvas(e);
+    const ctx = canvas.getContext('2d');
+    overlaySel = null;
+    for (let i = overlayCfg.elements.length - 1; i >= 0; i--) {
+      const el = overlayCfg.elements[i];
+      const b = elementBounds(ctx, el);
+      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
+        overlaySel = el;
+        dragging = el;
+        offX = p.x - el.x;
+        offY = p.y - el.y;
+        break;
+      }
+    }
+    syncProps();
+    redrawPreview();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const p = toCanvas(e);
+    dragging.x = Math.round(Math.min(640, Math.max(0, p.x - offX)));
+    dragging.y = Math.round(Math.min(640, Math.max(0, p.y - offY)));
+    redrawPreview();
+  });
+  window.addEventListener('mouseup', () => {
+    if (dragging) { dragging = null; saveOverlay(); }
+  });
+
+  $('#ovMetric').onchange = (e) => { if (overlaySel) { overlaySel.metric = e.target.value; saveOverlay(); redrawPreview(); } };
+  $('#ovText').oninput  = (e) => { if (overlaySel) { overlaySel.text = e.target.value; saveOverlay(); redrawPreview(); } };
+  $('#ovSize').oninput  = (e) => { if (overlaySel) { overlaySel.size = +e.target.value; saveOverlay(); redrawPreview(); } };
+  $('#ovColor').oninput = (e) => { if (overlaySel) { overlaySel.color = e.target.value; saveOverlay(); redrawPreview(); } };
+
+  $('#btnOvAdd').onclick = () => {
+    const t = $('#ovAdd').value;
+    const el = t === 'gauge'
+      ? { type: 'gauge', metric: 'liquid', x: 320, y: 320, size: 250, color: '#7c5cff', max: 60 }
+      : { type: t, metric: 'cpu', text: t === 'text' ? 'EDIT ME' : '',
+          x: 320, y: 320, size: t === 'clock' ? 90 : 70, color: '#ffffff' };
+    overlayCfg.elements.push(el);
+    overlaySel = el;
+    saveOverlay(); syncProps(); redrawPreview();
+  };
+  $('#btnOvDel').onclick = () => {
+    if (!overlaySel) return;
+    overlayCfg.elements = overlayCfg.elements.filter((e2) => e2 !== overlaySel);
+    overlaySel = null;
+    saveOverlay(); syncProps(); redrawPreview();
+  };
+  $('#ovInterval').onchange = () => {
+    if ($('#sensorToggle').checked) {
+      clearInterval(sensorTimer);
+      sensorTimer = setInterval(sensorTick, +$('#ovInterval').value);
+    }
+  };
+  $('#sensorBg').onchange = () => redrawPreview();
+
+  syncProps();
+  refreshSensorValues().then(redrawPreview);
+})();
+
+function stopSensor() {
+  if (sensorTimer) { clearInterval(sensorTimer); sensorTimer = null; }
+}
+
+$('#sensorToggle').onchange = async (e) => {
+  if (e.target.checked) {
+    hideGifPreview(); // canvas now mirrors what's pushed to the LCD
+    lastOverlayKey = ''; // force an immediate first push
+    sensorTick();
+    sensorTimer = setInterval(sensorTick, +$('#ovInterval').value);
+    lcdMsg('Overlay running' + (lastMedia ? ' over your ' + lastMedia.type + '.' : '.'));
+  } else {
+    stopSensor();
+    // Put the user's media back instead of leaving the last overlay frame up.
+    if (lastMedia && lastMedia.type === 'gif') {
+      const r = await window.rgb.lcd.sendGif(lastMedia.path);
+      if (r.ok) { showGifPreview(lastMedia.path); lcdMsg('Overlay off — GIF playback restored.'); }
+      else lcdMsg('Overlay off, but GIF restore failed: ' + r.error, true);
+    } else if (lastMedia) {
+      const r = await window.rgb.lcd.sendImage(lastMedia.path);
+      lcdMsg(r.ok ? 'Overlay off — image restored.' : ('Overlay off, but image restore failed: ' + r.error), !r.ok);
+    } else {
+      lcdMsg('Sensor overlay stopped.');
+    }
+  }
+};
+
+// ---- Ring sync feedback (ring is set from the Devices page now) ----
+window.rgb.onRingSynced((mode) => {
+  $('#devMsg').textContent = `Kraken ring set to ${mode} (hardware animation).`;
+});
+window.rgb.onRingSyncFailed((msg) => {
+  $('#devMsg').textContent = 'Kraken ring failed: ' + msg;
+});
+
+// ---- Hardware-aware UI: the Kraken LCD tab only exists on PCs with a Kraken ----
+function applyHwToUi() {
+  const lcdNav = document.querySelector('nav button[data-page="lcd"]');
+  const hasKraken = hwInfo.kraken !== false;
+  lcdNav.style.display = hasKraken ? '' : 'none';
+  $('#navKrakenLabel').style.display = hasKraken ? '' : 'none';
+  if (!hasKraken && $('#page-lcd').classList.contains('visible')) {
+    document.querySelector('nav button[data-page="devices"]').click();
+  }
+  $('#pawnioBanner').style.display = hwInfo.pawnio === false ? '' : 'none';
+  document.querySelectorAll('.kraken-only').forEach((el) => { el.style.display = hasKraken ? '' : 'none'; });
+  if (typeof applyRingUi === 'function') applyRingUi();
+  if (hwInfo.krakenBootloader) {
+    $('#devMsg').textContent = 'Warning: the Kraken is stuck in bootloader mode. Shut down, switch the PSU off for 30 seconds, then boot.';
+    $('#devMsg').className = 'msg err';
+  }
+}
+
+// LCD start-up: read the panel's real brightness/orientation, then restore the
+// last image/GIF. Only on PCs that actually have a Kraken.
+let lcdInitDone = false;
+async function initLcd() {
+  if (lcdInitDone || hwInfo.kraken === false) return;
+  lcdInitDone = true;
+  const r = await window.rgb.lcd.info();
+  if (r.ok && r.result) {
+    $('#lcdBrightness').value = r.result.brightness;
+    $('#lcdOrientation').value = String(r.result.orientation);
+  }
+  await restoreLcdMedia();
+}
+
+$('#pawnioGet').onclick = () => window.rgb.openPawnio();
+window.rgb.onHwChanged((h) => { hwInfo = h; applyHwToUi(); initLcd(); });
+window.rgb.hw().then((h) => { hwInfo = h; applyHwToUi(); initLcd(); });
+
+// ---- GIF playback ----
+// The driver plays GIFs natively on the Kraken firmware (smooth, looping) — so
+// we just hand it the file and let the hardware do the animation. No more
+// frame-streaming / Stop button.
+$('#btnLcdGif').onclick = async () => {
+  if ($('#sensorToggle').checked) { $('#sensorToggle').checked = false; stopSensor(); }
+  const r = await window.rgb.lcd.pickImage(); // native dialog; main sends .gif via setGif
+  if (r.ok) {
+    lcdMsg('Playing on the LCD: ' + r.path);
+    setLastMedia(r.path.toLowerCase().endsWith('.gif') ? 'gif' : 'image', r.path);
+    if (lastMedia.type === 'gif') showGifPreview(r.path);
+    else { hideGifPreview(); drawPreviewImage(r.path); }
+  } else if (r.error !== 'canceled') lcdMsg(r.error, true);
+};
+
+// ---- Profiles ----
+async function renderProfiles() {
+  const all = await window.rgb.loadProfiles();
+  const list = $('#profileList');
+  list.innerHTML = '';
+  for (const name of Object.keys(all)) {
+    const b = document.createElement('button');
+    b.className = 'btn secondary';
+    b.textContent = name;
+    b.onclick = async () => {
+      const r = await window.rgb.applyProfile(name);
+      if (r.ok) {
+        deviceState = r.state; renderDevices(); syncEffectsUiFromState(true);
+        $('#profMsg').textContent = 'Applied "' + name + '" (saved — it will still be active after a restart)';
+      } else {
+        $('#profMsg').textContent = 'Could not apply profile: ' + r.error;
+      }
+    };
+    list.appendChild(b);
+  }
+}
+
+$('#btnSaveProfile').onclick = async () => {
+  const name = $('#profileName').value.trim();
+  if (!name) return;
+  const r = await window.rgb.saveProfile(name);
+  if (r && r.ok === false) { $('#profMsg').textContent = 'Could not save profile: ' + r.error; return; }
+  $('#profileName').value = '';
+  $('#profMsg').textContent = 'Saved "' + name + '".';
+  renderProfiles();
+};
+
+// ---- GIFs: categories like Discord's picker + search ------------------------
+// Downloads locally, then plays natively on the LCD.
+// Your own GIPHY key: Settings > GIF search, or src/local-config.json (not in git).
+let GIPHY_KEY = '';
+window.rgb.appInfo().then((i) => { GIPHY_KEY = (i && i.giphyKey) || ''; }).catch(() => {});
+const GIPHY = 'https://api.giphy.com/v1/gifs/';
+const GIF_CATEGORIES = [
+  { label: 'Recent', recent: true },
+  { label: 'Trending', trending: true },
+  { label: 'Anime', q: 'anime aesthetic' },
+  { label: 'Space', q: 'space galaxy' },
+  { label: 'Neon', q: 'neon loop' },
+  { label: 'Cyberpunk', q: 'cyberpunk city' },
+  { label: 'Lo-fi', q: 'lofi aesthetic' },
+  { label: 'Retro', q: 'retro synthwave' },
+  { label: 'Abstract', q: 'abstract loop' },
+  { label: 'Nature', q: 'nature aesthetic' },
+  { label: 'Fire', q: 'fire flames loop' },
+  { label: 'Ocean', q: 'ocean waves loop' },
+  { label: 'Cats', q: 'cats' },
+  { label: 'Gaming', q: 'gaming' },
+  { label: 'Memes', q: 'meme' },
+  { label: 'Cars', q: 'cars drift' },
+];
+let gifCatsBuilt = false;
+
+async function giphyFetch(endpoint, params) {
+  if (!GIPHY_KEY) throw new Error('GIF search needs a free GIPHY API key - add it in Settings (developers.giphy.com).');
+  const url = GIPHY + endpoint + '?api_key=' + GIPHY_KEY + '&rating=pg-13&' + params;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return (await res.json()).data || [];
+}
+
+function showGifView(view) {
+  $('#gifCats').style.display = view === 'cats' ? '' : 'none';
+  $('#giphyGrid').style.display = view === 'grid' ? '' : 'none';
+  $('#gifBack').style.display = view === 'grid' ? '' : 'none';
+}
+
+function recentGifs() {
+  return (appSettings.recentGifs || []).filter((g) => g && g.id && g.url);
+}
+
+// Category tiles, each with a live GIF behind its name (fetched once).
+function buildGifCategories() {
+  if (gifCatsBuilt) return;
+  gifCatsBuilt = true;
+  const box = $('#gifCats');
+  box.innerHTML = '';
+  for (const c of GIF_CATEGORIES) {
+    const tile = document.createElement('div');
+    tile.className = 'gif-cat';
+    const span = document.createElement('span');
+    span.textContent = c.label;
+    tile.appendChild(span);
+    tile.onclick = () => openGifCategory(c);
+    box.appendChild(tile);
+    const setBg = (u) => { if (u) tile.style.backgroundImage = `url("${u}")`; };
+    if (c.recent) setBg((recentGifs()[0] || {}).thumb);
+    else {
+      (c.trending ? giphyFetch('trending', 'limit=1') : giphyFetch('search', 'limit=1&q=' + encodeURIComponent(c.q)))
+        .then((d) => d[0] && setBg(d[0].images.fixed_width_downsampled?.url || d[0].images.fixed_width_small?.url))
+        .catch(() => {});
+    }
+  }
+  showGifView('cats');
+}
+
+function showGifResults(list, emptyMsg) {
+  const grid = $('#giphyGrid');
+  grid.innerHTML = '';
+  for (const g of list) {
+    const img = document.createElement('img');
+    img.src = g.images ? g.images.fixed_width_small.url : g.thumb;
+    img.title = g.title || g.id;
+    img.loading = 'lazy';
+    img.onclick = () => playGiphy(g);
+    grid.appendChild(img);
+  }
+  showGifView('grid');
+  $('#giphyMsg').textContent = list.length ? 'Click a GIF to play it on the LCD.' : emptyMsg;
+}
+
+async function openGifCategory(c) {
+  if (c.recent) return showGifResults(recentGifs(), 'Nothing yet — GIFs you play show up here.');
+  $('#giphyQ').value = c.trending ? '' : c.label;
+  $('#giphyMsg').textContent = 'Loading…';
+  try {
+    const d = c.trending ? await giphyFetch('trending', 'limit=36') : await giphyFetch('search', 'limit=36&q=' + encodeURIComponent(c.q));
+    showGifResults(d, 'No GIFs found.');
+  } catch (e) {
+    $('#giphyMsg').textContent = 'GIPHY failed: ' + e.message;
+  }
+}
+
+async function giphySearch() {
+  const q = $('#giphyQ').value.trim();
+  if (!q) { showGifView('cats'); $('#giphyMsg').textContent = ''; return; }
+  $('#giphyMsg').textContent = 'Searching…';
+  try {
+    showGifResults(await giphyFetch('search', 'limit=36&q=' + encodeURIComponent(q)), 'No results for that search.');
+  } catch (e) {
+    $('#giphyMsg').textContent = 'GIPHY search failed: ' + e.message;
+  }
+}
+let gifTypeTimer = null;
+$('#giphyQ').addEventListener('input', () => { clearTimeout(gifTypeTimer); gifTypeTimer = setTimeout(giphySearch, 450); });
+$('#giphyQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(gifTypeTimer); giphySearch(); } });
+$('#gifBack').onclick = () => { $('#giphyQ').value = ''; showGifView('cats'); $('#giphyMsg').textContent = ''; };
+document.querySelector('nav button[data-page="lcd"]').addEventListener('click', buildGifCategories);
+
+// Remember what was played (newest first) for the Recent category.
+function rememberGif(g) {
+  if (!g.images) return;
+  const item = { id: g.id, title: g.title || '', url: g.images.original.url, thumb: g.images.fixed_width_small.url };
+  const list = [item, ...recentGifs().filter((x) => x.id !== g.id)].slice(0, 30);
+  saveSetting({ recentGifs: list });
+  const tile = $('#gifCats .gif-cat');
+  if (tile) tile.style.backgroundImage = `url("${item.thumb}")`;
+}
+
+async function playGiphy(g) {
+  $('#giphyMsg').textContent = 'Downloading…';
+  const dl = await window.rgb.giphyDownload(g.images ? g.images.original.url : g.url, g.id);
+  if (!dl.ok) { $('#giphyMsg').textContent = 'Download failed: ' + dl.error; return; }
+  if ($('#sensorToggle').checked) { $('#sensorToggle').checked = false; stopSensor(); }
+  $('#giphyMsg').textContent = 'Sending to LCD…';
+  const r = await window.rgb.lcd.sendGif(dl.path);
+  if (r.ok) {
+    setLastMedia('gif', dl.path);
+    showGifPreview(dl.path);
+    $('#giphyMsg').textContent = 'Playing on the LCD.';
+    rememberGif(g);
+    lcdMsg('Playing GIPHY: ' + (g.title || g.id));
+  } else {
+    $('#giphyMsg').textContent = 'LCD failed: ' + r.error;
+  }
+}
+
+// ---- Restore the last image/GIF onto the LCD after a restart ----
+// (called from initLcd, only when a Kraken is present)
+async function restoreLcdMedia() {
+  try {
+    const s = await window.rgb.getSettings();
+    if (s.lcdMedia && s.lcdMedia.path) {
+      setLastMedia(s.lcdMedia.type, s.lcdMedia.path);
+      const r = s.lcdMedia.type === 'gif'
+        ? await window.rgb.lcd.sendGif(s.lcdMedia.path)
+        : await window.rgb.lcd.sendImage(s.lcdMedia.path);
+      if (r.ok) {
+        if (s.lcdMedia.type === 'gif') showGifPreview(s.lcdMedia.path);
+        else drawPreviewImage(s.lcdMedia.path);
+        lcdMsg('Restored your ' + s.lcdMedia.type + ' on the LCD.');
+      } else if (!restoreLcdMedia.retried) {
+        // The cooler is sometimes still busy right after boot: try once more.
+        restoreLcdMedia.retried = true;
+        lcdMsg('The screen was busy \u2014 trying your ' + s.lcdMedia.type + ' again in a few seconds\u2026');
+        setTimeout(restoreLcdMedia, 8000);
+      } else {
+        lcdMsg('Could not restore your ' + s.lcdMedia.type + ': ' + r.error, true);
+      }
+    }
+  } catch (_) {}
+}
+
+// ---- Peripherals page ----
+// Mice: DPI speeds + polling rate, written into the mouse's onboard profile by
+// peripherals/logi_hidpp.py (checksum-checked, backed up, verified).
+let periphMice = [];
+let periphScanned = false;
+let periphSel = 0;
+let periphView = 'perf';           // perf | buttons | macros
+let periphMacros = null;           // macro library (kept in settings.periphMacros)
+let macroSel = null;
+let recState = null;               // macro recording in progress
+let recDelays = true;
+let keyWait = null;                // one-shot "press a key" listener
+
+const MOUSE_ICON = '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>';
+const KEYBOARD_ICON = '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>';
+
+// ---- Key tables: KeyboardEvent.code -> HID usage (keyboard page) ----------
+const HID = {};
+const HID_NAME = {};
+(function buildHid() {
+  const add = (code, hid, name) => { HID[code] = hid; HID_NAME[hid] = name; };
+  for (let i = 0; i < 26; i++) add('Key' + String.fromCharCode(65 + i), 4 + i, String.fromCharCode(65 + i));
+  for (let i = 1; i <= 9; i++) add('Digit' + i, 0x1D + i, String(i));
+  add('Digit0', 0x27, '0');
+  [['Enter', 0x28, 'Enter'], ['Escape', 0x29, 'Esc'], ['Backspace', 0x2A, 'Backspace'], ['Tab', 0x2B, 'Tab'], ['Space', 0x2C, 'Space'],
+    ['Minus', 0x2D, '-'], ['Equal', 0x2E, '='], ['BracketLeft', 0x2F, '['], ['BracketRight', 0x30, ']'], ['Backslash', 0x31, '\\'],
+    ['Semicolon', 0x33, ';'], ['Quote', 0x34, "'"], ['Backquote', 0x35, '`'], ['Comma', 0x36, ','], ['Period', 0x37, '.'],
+    ['Slash', 0x38, '/'], ['CapsLock', 0x39, 'Caps Lock']].forEach((a) => add(...a));
+  for (let i = 1; i <= 12; i++) add('F' + i, 0x39 + i, 'F' + i);
+  [['PrintScreen', 0x46, 'Print Screen'], ['ScrollLock', 0x47, 'Scroll Lock'], ['Pause', 0x48, 'Pause'], ['Insert', 0x49, 'Insert'],
+    ['Home', 0x4A, 'Home'], ['PageUp', 0x4B, 'Page Up'], ['Delete', 0x4C, 'Delete'], ['End', 0x4D, 'End'], ['PageDown', 0x4E, 'Page Down'],
+    ['ArrowRight', 0x4F, 'Right'], ['ArrowLeft', 0x50, 'Left'], ['ArrowDown', 0x51, 'Down'], ['ArrowUp', 0x52, 'Up'],
+    ['NumLock', 0x53, 'Num Lock'], ['NumpadDivide', 0x54, 'Num /'], ['NumpadMultiply', 0x55, 'Num *'],
+    ['NumpadSubtract', 0x56, 'Num -'], ['NumpadAdd', 0x57, 'Num +'], ['NumpadEnter', 0x58, 'Num Enter']].forEach((a) => add(...a));
+  for (let i = 1; i <= 9; i++) add('Numpad' + i, 0x58 + i, 'Num ' + i);
+  add('Numpad0', 0x62, 'Num 0'); add('NumpadDecimal', 0x63, 'Num .'); add('ContextMenu', 0x65, 'Menu');
+  for (let i = 13; i <= 24; i++) add('F' + i, 0x68 + i - 13, 'F' + i);
+  ['Ctrl', 'Shift', 'Alt', 'Win'].forEach((n, k) => {
+    add(['ControlLeft', 'ShiftLeft', 'AltLeft', 'MetaLeft'][k], 0xE0 + k, n);
+    add(['ControlRight', 'ShiftRight', 'AltRight', 'MetaRight'][k], 0xE4 + k, 'Right ' + n);
+  });
+})();
+const MOD_NAMES = ['Ctrl', 'Shift', 'Alt', 'Win', 'Right Ctrl', 'Right Shift', 'Right Alt', 'Right Win'];
+const isMod = (code) => code >= 0xE0 && code <= 0xE7;
+const keyName = (code) => HID_NAME[code] || ('Key ' + code);
+const comboText = (mod, key) => [...MOD_NAMES.filter((_, k) => mod & (1 << k)), ...(key ? [keyName(key)] : [])].join(' + ') || 'Nothing';
+const MOUSE_ACTS = [[1, 'Left click'], [2, 'Right click'], [3, 'Middle click'], [4, 'Back'], [5, 'Forward']];
+const DPI_ACTS = [[5, 'DPI cycle', 'Steps through your speeds'], [3, 'DPI up', 'Next faster speed'], [4, 'DPI down', 'Next slower speed'],
+  [7, 'Sniper (hold)', 'Slow speed while held'], [6, 'Default DPI', 'Back to the start speed']];
+const MEDIA_ACTS = [[0xCD, 'Play / Pause'], [0xB5, 'Next track'], [0xB6, 'Previous track'], [0xE9, 'Volume up'], [0xEA, 'Volume down'], [0xE2, 'Mute']];
+const OTHER_SPECIALS = { 1: 'Scroll left', 2: 'Scroll right', 8: 'Next profile', 9: 'Previous profile', 10: 'Cycle profiles', 11: 'G-Shift', 12: 'Battery indicator' };
+// Where each button sits on the drawing (percent of width / height).
+const HOTSPOT = { 'Left button': [30, 22], 'Right button': [70, 22], 'Wheel click': [50, 19], 'Side button (forward)': [8, 43],
+  'Side button (back)': [8, 58], 'DPI button': [50, 37], 'Sniper button': [8, 72], 'Wheel tilt left': [41, 12], 'Wheel tilt right': [59, 12] };
+
+// ---- Named actions (G HUB-style "Actions"): all are plain key/media presses
+// stored on the mouse, except "Apps & sites", which RGB Studio opens. --------
+const K = (mod, key) => ({ kind: 'key', mod, key });
+const CT = 1, SH = 2, AL = 4, WN = 8;
+const WIN_ACTS = [
+  ['Copy', K(CT, 0x06)], ['Paste', K(CT, 0x19)], ['Cut', K(CT, 0x1B)], ['Undo', K(CT, 0x1D)], ['Redo', K(CT, 0x1C)],
+  ['Select all', K(CT, 0x04)], ['Screenshot (snip)', K(WN | SH, 0x16)], ['Clipboard history', K(WN, 0x19)],
+  ['Emoji panel', K(WN, 0x37)], ['Switch app', K(AL, 0x2B)], ['Task view', K(WN, 0x2B)], ['Show desktop', K(WN, 0x07)],
+  ['Close window', K(AL, 0x3D)], ['File Explorer', K(WN, 0x08)], ['Task Manager', K(CT | SH, 0x29)], ['Lock PC', K(WN, 0x0F)],
+  ['Run box', K(WN, 0x15)], ['Calculator', { kind: 'media', usage: 0x192 }], ['Next desktop', K(CT | WN, 0x4F)],
+  ['Previous desktop', K(CT | WN, 0x50)], ['Browser back', { kind: 'media', usage: 0x224 }],
+  ['Browser forward', { kind: 'media', usage: 0x225 }], ['Refresh page', { kind: 'media', usage: 0x227 }],
+  ['New tab', K(CT, 0x17)], ['Close tab', K(CT, 0x1A)], ['Reopen closed tab', K(CT | SH, 0x17)],
+  ['Zoom in', K(CT, 0x2E)], ['Zoom out', K(CT, 0x2D)], ['Xbox Game Bar', K(WN, 0x0A)],
+  ['Game Bar: record last 30 s', K(WN | AL, 0x0A)], ['Game Bar: start/stop recording', K(WN | AL, 0x15)],
+];
+// Discord / OBS: the button presses a spare key (Ctrl+F13...) that you link
+// once in their keybind settings - works with RGB Studio closed.
+const DISCORD_ACTS = [['Toggle mute', K(CT, 0x68), 'Toggle Mute'], ['Toggle deafen', K(CT, 0x69), 'Toggle Deafen'],
+  ['Push to talk', K(CT, 0x6A), 'Push to Talk (Normal)']];
+const OBS_ACTS = [['Start/stop recording', K(CT, 0x6B), 'Start Recording and Stop Recording'],
+  ['Start/stop streaming', K(CT, 0x6C), 'Start Streaming and Stop Streaming'],
+  ['Save replay', K(CT, 0x6D), 'Save Replay (under Replay Buffer)'], ['Pause recording', K(CT, 0x6E), 'Pause Recording and Unpause Recording']];
+const CV_NAMES = [['clip', 'Save clip'], ['clip_alt', 'Save clip (2nd key)'], ['long_recording', 'Start/stop long recording'],
+  ['bookmark', 'Bookmark moment'], ['screenshot', 'Screenshot']];
+let periphInteg = {};
+let periphActions = null;          // launch app / open website (settings.periphActions)
+
+const NAME_HID = {};
+for (const [hid, name] of Object.entries(HID_NAME)) { NAME_HID[name] = +hid; NAME_HID[name.replace(/ /g, '')] = +hid; }
+// "Alt+F7" / "F8" (ClipVault's format) -> a binding
+function parseHotkey(str) {
+  if (!str) return null;
+  let mod = 0, key = 0;
+  for (const p of String(str).split('+').map((x) => x.trim()).filter(Boolean)) {
+    const l = p.toLowerCase();
+    if (l === 'ctrl' || l === 'control') mod |= CT;
+    else if (l === 'shift') mod |= SH;
+    else if (l === 'alt') mod |= AL;
+    else if (l === 'win') mod |= WN;
+    else key = NAME_HID[p] ?? NAME_HID[p.toUpperCase()] ?? 0;
+  }
+  return key ? K(mod, key) : null;
+}
+const cvHotkeys = () => (periphInteg.clipvault && periphInteg.clipvault.hotkeys) || {};
+
+function actions() {
+  if (!periphActions) periphActions = Array.isArray(appSettings.periphActions) ? appSettings.periphActions : [];
+  return periphActions;
+}
+function persistActions() {
+  appSettings.periphActions = actions();
+  window.rgb.setSettings({ periphActions: actions() });
+}
+function newAction(name, target, type) {
+  const used = new Set(actions().map((a) => a.hotkey && `${a.hotkey.mod}-${a.hotkey.key}`));
+  let hotkey = null;
+  for (const mod of [CT | AL, CT | AL | SH]) {
+    for (let key = 0x68; key <= 0x73 && !hotkey; key++) if (!used.has(`${mod}-${key}`)) hotkey = { mod, key };
+    if (hotkey) break;
+  }
+  if (!hotkey) return null;
+  const a = { id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, target, type, hotkey };
+  actions().push(a);
+  return a;
+}
+const actionBinding = (a) => K(a.hotkey.mod, a.hotkey.key);
+
+// What a binding is, in words, and which category of the editor it lives in.
+function namedAction(b) {
+  if (!b) return null;
+  if (b.kind === 'key') {
+    const a = actions().find((x) => x.hotkey && x.hotkey.mod === b.mod && x.hotkey.key === b.key);
+    if (a) return { cat: 'apps', label: 'Open ' + a.name };
+    for (const [arr, app] of [[DISCORD_ACTS, 'Discord'], [OBS_ACTS, 'OBS']]) {
+      const x = arr.find((y) => sameBinding(y[1], b));
+      if (x) return { cat: 'integr', label: `${app}: ${x[0]}`, app, setup: x[2] };
+    }
+    for (const [id, nm] of CV_NAMES) {
+      const hb = parseHotkey(cvHotkeys()[id]);
+      if (hb && sameBinding(hb, b)) return { cat: 'integr', label: 'ClipVault: ' + nm };
+    }
+  }
+  if (b.kind === 'key' || b.kind === 'media') {
+    const x = WIN_ACTS.find((y) => sameBinding(y[1], b));
+    if (x) return { cat: 'windows', label: x[0] };
+  }
+  return null;
+}
+function catOf(b) {
+  const n = namedAction(b);
+  if (n) return n.cat;
+  if (!b) return 'mouse';
+  if (b.kind === 'mouse' || (b.kind === 'special' && [3, 4, 5, 6, 7].includes(b.code))) return 'mouse';
+  if (b.kind === 'key') return 'key';
+  if (b.kind === 'media') return 'media';
+  if (b.kind === 'macro') return 'macro';
+  return 'other';
+}
+
+// US layout: character -> [HID code, needs Shift]
+const CHAR_KEY = {};
+(function buildChars() {
+  for (let i = 0; i < 26; i++) { CHAR_KEY[String.fromCharCode(97 + i)] = [4 + i, false]; CHAR_KEY[String.fromCharCode(65 + i)] = [4 + i, true]; }
+  [['`', '~', 0x35], ['1', '!', 0x1E], ['2', '@', 0x1F], ['3', '#', 0x20], ['4', '$', 0x21], ['5', '%', 0x22], ['6', '^', 0x23],
+    ['7', '&', 0x24], ['8', '*', 0x25], ['9', '(', 0x26], ['0', ')', 0x27], ['-', '_', 0x2D], ['=', '+', 0x2E], ['[', '{', 0x2F],
+    [']', '}', 0x30], ['\\', '|', 0x31], [';', ':', 0x33], ["'", '"', 0x34], [',', '<', 0x36], ['.', '>', 0x37], ['/', '?', 0x38]]
+    .forEach(([a, b, c]) => { CHAR_KEY[a] = [c, false]; CHAR_KEY[b] = [c, true]; });
+  CHAR_KEY[' '] = [0x2C, false];
+  CHAR_KEY['\n'] = [0x28, false];
+})();
+
+// ---- Macro library ----------------------------------------------------------
+function macros() {
+  if (!periphMacros) periphMacros = Array.isArray(appSettings.periphMacros) ? appSettings.periphMacros : [];
+  return periphMacros;
+}
+const macroById = (id) => macros().find((x) => x.id === id);
+const stepsKey = (steps) => (steps || []).map((s) => (s.t === 'delay' ? 'd' + s.ms : s.t === 'key' ? (s.down ? 'k+' : 'k-') + s.code
+  : (s.down ? 'm+' : 'm-') + s.btn)).join(',');
+const macroBytes = (steps) => (steps || []).length * 3 + 1;
+function persistMacros() {
+  appSettings.periphMacros = macros();
+  window.rgb.setSettings({ periphMacros: macros() });
+}
+function newMacro(name, steps) {
+  const mc = { id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, steps: steps || [] };
+  macros().push(mc);
+  return mc;
+}
+// Rows for the step list: a press + (pause) + release of the same key is one "tap" row.
+function stepRows(steps) {
+  const rows = [];
+  const same = (a, b) => a && b && a.t === b.t && a.t !== 'delay' && (a.t === 'key' ? a.code === b.code : a.btn === b.btn);
+  const label = (s) => (s.t === 'key' ? keyName(s.code) : (['', 'Left', 'Right', 'Middle', 'Back', 'Forward'][s.btn] || 'Button ' + s.btn) + ' click');
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    if (s.t === 'delay') { rows.push({ kind: 'delay', i, ms: s.ms }); continue; }
+    if (s.down && same(s, steps[i + 1]) && !steps[i + 1].down) { rows.push({ kind: 'tap', i, n: 2, label: label(s) }); i += 1; continue; }
+    if (s.down && steps[i + 1] && steps[i + 1].t === 'delay' && same(s, steps[i + 2]) && !steps[i + 2].down) {
+      rows.push({ kind: 'tap', i, n: 3, label: label(s), hold: i + 1 }); i += 2; continue;
+    }
+    rows.push({ kind: 'single', i, down: s.down, label: (s.down ? 'Hold ' : 'Let go of ') + label(s) });
+  }
+  return rows;
+}
+const actionCount = (steps) => stepRows(steps).filter((r) => r.kind !== 'delay').length;
+function textSteps(text) {
+  const out = [];
+  for (const ch of text) {
+    const k = CHAR_KEY[ch];
+    if (!k) continue;
+    if (k[1]) out.push({ t: 'key', code: 0xE1, down: true });
+    out.push({ t: 'key', code: k[0], down: true }, { t: 'key', code: k[0], down: false });
+    if (k[1]) out.push({ t: 'key', code: 0xE1, down: false });
+  }
+  return out;
+}
+
+// ---- Bindings -------------------------------------------------------------
+function importBinding(b, m, k) {
+  switch (b.kind) {
+    case 'mouse': return { kind: 'mouse', btn: b.btn };
+    case 'key': return { kind: 'key', mod: b.mod, key: b.key };
+    case 'media': return { kind: 'media', usage: b.usage };
+    case 'special': return { kind: 'special', code: b.code };
+    case 'disabled': return { kind: 'disabled' };
+    case 'macro': {
+      const key = stepsKey(b.steps);
+      let mc = macros().find((x) => stepsKey(x.steps) === key);
+      if (!mc) { mc = newMacro(`Macro on ${b.label || 'button ' + (k + 1)}`, b.steps); m.newMacros = true; }
+      return { kind: 'macro', id: mc.id };
+    }
+    default: return { kind: 'raw', raw: b.raw, note: b.note };
+  }
+}
+function bindText(b) {
+  if (!b) return 'Unchanged';
+  const named = namedAction(b);
+  if (named) return named.label;
+  switch (b.kind) {
+    case 'mouse': return (MOUSE_ACTS.find((a) => a[0] === b.btn) || [0, 'Mouse button ' + b.btn])[1];
+    case 'key': return comboText(b.mod, b.key);
+    case 'media': return (MEDIA_ACTS.find((a) => a[0] === b.usage) || [0, 'Media key'])[1];
+    case 'special': return (DPI_ACTS.find((a) => a[0] === b.code) || [0, OTHER_SPECIALS[b.code] || 'Special ' + b.code])[1];
+    case 'macro': { const mc = macroById(b.id); return mc ? '▶ ' + mc.name : 'Missing macro'; }
+    case 'disabled': return 'Disabled';
+    default: return 'Custom (set by another app)';
+  }
+}
+const sameBinding = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function resolveBinding(b) {
+  if (b && b.kind === 'macro') { const mc = macroById(b.id); return { kind: 'macro', steps: mc ? mc.steps : [] }; }
+  return b;
+}
+function periphSig(m) {
+  const e = m.edit;
+  return JSON.stringify({ d: e.dpis, a: e.active, r: e.rate, s: e.shift,
+    b: (e.buttons || []).map((b) => (b && b.kind === 'macro' ? 'M:' + stepsKey(resolveBinding(b).steps) : b)) });
+}
+
+async function periphScan() {
+  stopRecording();
+  $('#periphMsg').className = 'msg';
+  $('#periphMsg').textContent = 'Looking for your mouse… (move it so it’s awake)';
+  $('#btnPeriphScan').disabled = true;
+  const prevKb = periphMice.find((x) => x.kind === 'keyboard');
+  const [r, kr] = await Promise.all([window.rgb.periph.scan(), window.rgb.periph.kbScan ? window.rgb.periph.kbScan() : Promise.resolve(null)]);
+  $('#btnPeriphScan').disabled = false;
+  try { periphInteg = (await window.rgb.periph.integrations()) || {}; } catch (_) { periphInteg = {}; }
+  const kbDev = kr && kr.ok && kr.keyboard ? kbFromScan(kr.keyboard, prevKb)
+    : kr && !kr.ok && !/not found|not connected/i.test(kr.error || '') ? { kind: 'keyboard', name: 'MonsGeek keyboard', error: kr.error } : null;
+  if (kbDev && kbDev.newMacros) persistMacros();
+  if (!r.ok) {
+    periphMice = kbDev ? [kbDev] : [];
+    $('#periphMsg').className = 'msg err'; $('#periphMsg').textContent = 'Mouse: ' + r.error;
+    renderPeriph();
+    return;
+  }
+  let added = false;
+  periphMice = (r.mice || []).map((m) => {
+    const out = { ...m, edit: null };
+    if (m.profile) {
+      out.edit = {
+        dpis: [...m.profile.dpis],
+        active: Math.min(m.profile.defaultIndex, Math.max(0, m.profile.dpis.length - 1)),
+        shift: m.profile.shiftIndex < m.profile.dpis.length ? m.profile.shiftIndex : 0,
+        rate: m.profile.rateHz || 1000,
+        buttons: m.buttons ? m.buttons.map((b, k) => importBinding(b, out, k)) : null,
+      };
+      if (out.newMacros) added = true;
+      const side = (m.buttons || []).findIndex((b) => /^Side/.test(b.label));
+      out.bsel = side >= 0 ? side : 0;
+      out.orig = periphSig(out);
+    }
+    return out;
+  });
+  if (added) persistMacros();
+  if (kbDev) periphMice.push(kbDev);
+  $('#periphMsg').textContent = periphMice.length ? '' : 'Nothing found. Move the mouse to wake it up (close G HUB first) and plug the keyboard in with its cable, then click Look for devices.';
+  renderPeriph();
+}
+
+function mouseArt() {
+  // A generic mouse drawing (not any brand's design), tinted with the theme.
+  return `<svg class="mouse" viewBox="0 0 200 300">
+    <defs>
+      <linearGradient id="mbody" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#2a2a33"/><stop offset="1" stop-color="#121217"/>
+      </linearGradient>
+      <linearGradient id="mglow" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" style="stop-color:var(--accent); stop-opacity:.9"/><stop offset="1" style="stop-color:var(--accent2); stop-opacity:.6"/>
+      </linearGradient>
+    </defs>
+    <path d="M100 8 C 40 8 18 60 18 120 L 18 190 C 18 255 55 292 100 292 C 145 292 182 255 182 190 L 182 120 C 182 60 160 8 100 8 Z"
+      fill="url(#mbody)" stroke="url(#mglow)" stroke-width="3"/>
+    <path d="M100 10 L 100 112" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+    <path d="M22 112 Q 100 128 178 112" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="2"/>
+    <rect x="91" y="40" width="18" height="44" rx="9" fill="#0b0b10" stroke="url(#mglow)" stroke-width="2.5"/>
+    <path d="M60 40 Q 70 26 88 22" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="3" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function renderPeriph() {
+  const tabs = $('#periphTabs');
+  const grid = $('#periphGrid');
+  tabs.innerHTML = '';
+  grid.innerHTML = '';
+  if (periphSel >= periphMice.length) periphSel = 0;
+  periphMice.forEach((m, k) => {
+    const t = document.createElement('button');
+    t.className = 'pdev-tab' + (k === periphSel ? ' on' : '');
+    t.innerHTML = m.kind === 'keyboard'
+      ? `${KEYBOARD_ICON}<div><b>${esc(m.name)}</b><small>${m.error ? 'Keyboard \u00b7 couldn\u2019t read it' : 'Keyboard \u00b7 saved on the device'}</small></div>`
+      : `${MOUSE_ICON}<div><b>${esc(m.name)}</b><small>${m.writable ? 'Mouse \u00b7 saved on the device' : 'Mouse \u00b7 read-only'}</small></div>`;
+    t.onclick = () => { stopRecording(); periphSel = k; renderPeriph(); };
+    tabs.appendChild(t);
+  });
+  const m = periphMice[periphSel];
+  if (!m) return;
+  if (m.kind === 'keyboard') {
+    if (m.error) grid.innerHTML = `<div class="card"><h2>${esc(m.name)}</h2><div class="msg err">${esc(m.error)}</div></div>`;
+    else renderKeyboard(grid, m);
+    fillRanges();
+    return;
+  }
+  const e = m.edit;
+  if (!e) {
+    grid.innerHTML = `<div class="card"><h2>${esc(m.name)}</h2><div class="msg hint">${esc(m.why || 'This mouse can’t be edited.')}</div></div>`;
+    return;
+  }
+  if (periphView !== 'macros') stopRecording();
+  const dirty = periphSig(m) !== m.orig;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; flex-direction:column; gap:16px; flex:1 0 auto';
+  const views = [['perf', 'Sensitivity & polling', '<circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>'],
+    ['buttons', 'Buttons', '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7M6 10h12"/>'],
+    ['macros', 'Macros', '<path d="M5 4v16M9 8l10 4-10 4z"/>']];
+  wrap.innerHTML = `<div class="psub">${views.map(([v, label, icon]) =>
+    `<button class="psub-btn ${periphView === v ? 'on' : ''}" data-v="${v}"><svg viewBox="0 0 24 24">${icon}</svg>${label}</button>`).join('')}</div>
+    <div class="pview"></div>
+    <div class="savebar">
+      <span class="state ${dirty ? 'dirty' : ''}">${dirty ? '● Unsaved changes' : 'Everything is saved on the mouse.'}</span>
+      <span class="msg pmsg" style="margin:0"></span>
+      <button class="btn secondary restore" title="Put back what the mouse had before RGB Studio first changed it">Restore original</button>
+      <button class="btn save" ${dirty && m.writable ? '' : 'disabled'}>Save to mouse</button>
+    </div>`;
+  grid.appendChild(wrap);
+  wrap.querySelectorAll('.psub-btn').forEach((b) => { b.onclick = () => { periphView = b.dataset.v; renderPeriph(); }; });
+  const view = wrap.querySelector('.pview');
+  if (periphView === 'buttons') renderButtonsView(view, m);
+  else if (periphView === 'macros') renderMacrosView(view, m);
+  else renderPerfView(view, m);
+
+  const msg = wrap.querySelector('.pmsg');
+  wrap.querySelector('.save').onclick = async () => {
+    stopRecording();
+    if (e.buttons && !e.buttons.some((b) => b && b.kind === 'mouse' && b.btn === 1)) {
+      msg.className = 'msg pmsg err'; msg.textContent = 'Keep Left click on at least one button.';
+      return;
+    }
+    msg.className = 'msg pmsg'; msg.textContent = 'Saving…';
+    const cfg = { dpis: e.dpis, defaultIndex: e.active, shiftIndex: e.shift, rateHz: e.rate };
+    if (e.buttons) cfg.buttons = e.buttons.map(resolveBinding);
+    const r = await window.rgb.periph.saveMouse(m.id, cfg);
+    if (r.ok) { m.orig = periphSig(m); renderPeriph(); const n = $('#periphGrid .pmsg'); if (n) { n.className = 'msg pmsg ok'; n.textContent = 'Saved to the mouse.'; } }
+    else { msg.className = 'msg pmsg err'; msg.textContent = r.error; }
+  };
+  wrap.querySelector('.restore').onclick = async () => {
+    stopRecording();
+    msg.className = 'msg pmsg'; msg.textContent = 'Restoring…';
+    const r = await window.rgb.periph.restoreMouse(m.id);
+    if (r.ok) { await periphScan(); const n = $('#periphGrid .pmsg'); if (n) { n.className = 'msg pmsg ok'; n.textContent = 'Original settings restored.'; } }
+    else { msg.className = 'msg pmsg err'; msg.textContent = r.error; }
+  };
+  fillRanges();
+}
+
+// ---- Sensitivity & polling --------------------------------------------------
+function renderPerfView(view, m) {
+  const e = m.edit;
+  const rng = m.dpi || { min: 100, max: 25600, step: 50 };
+  const step = Math.max(1, rng.step || 50);
+  if (e.sel == null || e.sel >= e.dpis.length) e.sel = e.active;
+  const snap = (v) => Math.max(rng.min, Math.min(rng.max, Math.round((+v || rng.min) / step) * step));
+  const rateMs = (hz) => (1000 / hz).toString().replace(/\.0+$/, '') + ' ms';
+  const hasCycle = (e.buttons || []).some((b) => b && b.kind === 'special' && [3, 4, 5].includes(b.code));
+  view.innerHTML = `
+    <div class="pmouse">
+      <div class="card pm-hero">
+        ${mouseArt()}
+        <div class="big">${e.dpis[e.active]}<small>DPI</small></div>
+        <div class="stat">${e.rate} Hz polling · ${e.dpis.length} speed${e.dpis.length > 1 ? 's' : ''}</div>
+        <div class="ok-note">Stored in the mouse itself — it keeps these with RGB Studio closed, without G HUB, and on any PC.</div>
+      </div>
+      <div class="pm-right">
+        <div class="card">
+          <h2>Sensitivity (DPI)</h2>
+          <div class="msg" style="margin:-6px 0 14px">${e.dpis.length > 1
+            ? (hasCycle ? 'Your DPI button switches between these. Click one to edit it.' : 'To switch between these, set a button to “DPI cycle” on the Buttons tab.')
+            : 'One speed. Add more if you want a button to switch between them.'}</div>
+          <div class="chips">
+            ${e.dpis.map((v, k) => `<button class="chip-dpi ${k === e.sel ? 'sel' : ''} ${k === e.active ? 'start' : ''}" data-k="${k}">
+              <span class="v">${v}</span><span class="l">${k === e.active ? 'START' : 'SPEED ' + (k + 1)}</span></button>`).join('')}
+            ${e.dpis.length < 5 ? '<button class="chip-add">+ Add speed</button>' : ''}
+          </div>
+          <div class="dpi-editor">
+            <div class="top">
+              <button class="btn secondary stepbtn minus" title="-${step}">−</button>
+              <input class="dval" type="number" min="${rng.min}" max="${rng.max}" step="${step}" value="${e.dpis[e.sel]}">
+              <button class="btn secondary stepbtn plus" title="+${step}">+</button>
+              <div class="presets">${[400, 800, 1600, 3200].filter((p) => p >= rng.min && p <= rng.max)
+                .map((p) => `<button class="btn secondary preset" data-p="${p}">${p}</button>`).join('')}</div>
+            </div>
+            <input type="range" class="dslide" min="${rng.min}" max="${Math.min(rng.max, 6400)}" step="${step}" value="${Math.min(e.dpis[e.sel], 6400)}">
+            <div class="scale"><span>${rng.min}</span><span>800</span><span>1600</span><span>3200</span><span>6400</span></div>
+            <div class="acts">
+              ${e.sel !== e.active ? '<button class="btn secondary mkstart">Start on this speed</button>' : ''}
+              ${e.dpis.length > 1 ? '<button class="btn secondary rmspeed">Remove this speed</button>' : ''}
+              <span class="msg" style="margin:0; align-self:center">${rng.min}–${rng.max} DPI in steps of ${step}. Type any value above 6400.</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Polling rate</h2>
+          <div class="msg" style="margin:-6px 0 14px">How often the mouse reports to the PC. Higher = smoother and more responsive.</div>
+          <div class="rates-big">
+            ${(m.rates || [1000]).map((hz) => `<button class="rate-btn ${hz === e.rate ? 'on' : ''}" data-hz="${hz}"><b>${hz} Hz</b><small>${rateMs(hz)}</small></button>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  const setVal = (v) => { e.dpis[e.sel] = snap(v); renderPeriph(); };
+  view.querySelectorAll('.chip-dpi').forEach((c) => { c.onclick = () => { e.sel = +c.dataset.k; renderPeriph(); }; });
+  const add = view.querySelector('.chip-add');
+  if (add) add.onclick = () => { e.dpis.push(snap(Math.min(rng.max, (e.dpis[e.dpis.length - 1] || 800) * 2))); e.sel = e.dpis.length - 1; renderPeriph(); };
+  view.querySelector('.minus').onclick = () => setVal(e.dpis[e.sel] - step);
+  view.querySelector('.plus').onclick = () => setVal(e.dpis[e.sel] + step);
+  view.querySelector('.dval').onchange = (ev) => setVal(ev.target.value);
+  view.querySelector('.dval').onkeydown = (ev) => { if (ev.key === 'Enter') ev.target.blur(); };
+  const slide = view.querySelector('.dslide');
+  slide.oninput = () => { view.querySelector('.dval').value = snap(slide.value); };
+  slide.onchange = () => setVal(slide.value);
+  view.querySelectorAll('.preset').forEach((b) => { b.onclick = () => setVal(+b.dataset.p); });
+  const mk = view.querySelector('.mkstart');
+  if (mk) mk.onclick = () => { e.active = e.sel; renderPeriph(); };
+  const rm = view.querySelector('.rmspeed');
+  if (rm) rm.onclick = () => {
+    const gone = e.sel;
+    e.dpis.splice(gone, 1);
+    const fix = (i) => (i > gone ? i - 1 : i === gone ? 0 : i);
+    e.active = Math.min(fix(e.active), e.dpis.length - 1);
+    e.shift = Math.min(fix(e.shift), e.dpis.length - 1);
+    e.sel = Math.min(gone, e.dpis.length - 1);
+    renderPeriph();
+  };
+  view.querySelectorAll('.rate-btn').forEach((b) => { b.onclick = () => { e.rate = +b.dataset.hz; renderPeriph(); }; });
+}
+
+// ---- Buttons ----------------------------------------------------------------
+const BTN_CATS = [['mouse', 'Mouse & DPI'], ['key', 'Keyboard'], ['windows', 'Windows'], ['media', 'Media'],
+  ['integr', 'Integrations'], ['apps', 'Apps & sites'], ['macro', 'Macros'], ['other', 'Other']];
+
+function resetButtonsUsing(m, test) {
+  (m.edit.buttons || []).forEach((b, k) => {
+    if (b && test(b)) {
+      const f = (m.buttons[k] || {}).factory;
+      m.edit.buttons[k] = f ? importBinding(f, m, k) : { kind: 'disabled' };
+    }
+  });
+}
+
+function renderButtonsView(view, m) {
+  const e = m.edit;
+  if (!e.buttons || !m.buttons) {
+    view.innerHTML = '<div class="card"><div class="msg hint">This mouse didn’t report its buttons.</div></div>';
+    return;
+  }
+  const list = m.buttons.map((b, k) => ({ k, label: b.label })).filter((x) => m.buttons[x.k].present);
+  if (!list.some((x) => x.k === m.bsel)) m.bsel = list.length ? list[0].k : 0;
+  const k = m.bsel;
+  const cur = e.buttons[k];
+  const info = m.buttons[k];
+  if (!m.bcat) m.bcat = catOf(cur);
+  const set = (b) => { e.buttons[k] = b; renderPeriph(); };
+  const o = { device: 'mouse', dpis: e.dpis, shift: e.shift,
+    onShift: (i) => { e.shift = i; renderPeriph(); },
+    onNewMacro: (mc) => { e.buttons[k] = { kind: 'macro', id: mc.id }; periphView = 'macros'; renderPeriph(); } };
+  const leftGone = !e.buttons.some((b) => b && b.kind === 'mouse' && b.btn === 1);
+
+  view.innerHTML = `
+    <div class="pmouse">
+      <div class="card pbtn-left">
+        <div class="mouse-wrap">${mouseArt()}
+          ${list.filter((x) => HOTSPOT[x.label]).map((x) => `<button class="hot ${x.k === k ? 'on' : ''}" data-k="${x.k}"
+            style="left:${HOTSPOT[x.label][0]}%; top:${HOTSPOT[x.label][1]}%">${x.k + 1}</button>`).join('')}
+        </div>
+        <div class="btn-list">
+          ${list.map((x) => `<button class="btn-row ${x.k === k ? 'on' : ''}" data-k="${x.k}">
+            <span class="num">${x.k + 1}</span><span class="nm">${esc(x.label)}</span>
+            <span class="act">${esc(bindText(e.buttons[x.k]))}</span></button>`).join('')}
+        </div>
+      </div>
+      <div class="card pbtn-right">
+        <div class="pb-head">
+          <div><div class="pb-title">${esc(info.label)}</div><div class="msg" style="margin:2px 0 0">Does: <b>${esc(bindText(cur))}</b></div></div>
+          ${info.factory && !sameBinding(cur, importBinding(info.factory, m, k)) ? '<button class="btn secondary pb-reset">Reset to factory</button>' : ''}
+        </div>
+        ${leftGone ? '<div class="pb-warn">No button does Left click right now — put it back on one before saving.</div>' : ''}
+        ${cur && cur.kind === 'raw' ? `<div class="pb-warn">This button has a setting made by another app (${esc(cur.note || 'unknown type')}). It stays as it is unless you pick something new.</div>` : ''}
+        <div class="bcats">${pickerCats(o).map(([c, l]) => `<button class="bcat ${c === m.bcat ? 'on' : ''} ${c === catOf(cur) ? 'has' : ''}" data-c="${c}">${l}</button>`).join('')}</div>
+        <div class="bcat-body">${pickerBody(m.bcat, cur, o)}</div>
+        <div class="pmsg2 msg"></div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('.hot, .btn-row').forEach((b) => { b.onclick = () => { m.bsel = +b.dataset.k; m.bcat = null; renderPeriph(); }; });
+  view.querySelectorAll('.bcat').forEach((b) => { b.onclick = () => { m.bcat = b.dataset.c; renderPeriph(); }; });
+  const reset = view.querySelector('.pb-reset');
+  if (reset) reset.onclick = () => { m.bcat = null; set(importBinding(info.factory, m, k)); };
+  const note = view.querySelector('.pmsg2');
+  bindPicker(view, cur, set, o, (t) => { note.className = 'pmsg2 msg err'; note.textContent = t; });
+}
+
+// ---- Shared action picker (mouse buttons and keyboard keys) -----------------
+// o = { device: 'mouse' | 'keyboard', dpis, shift }
+const usageCount = (b) => (b && b.kind === 'key' ? [0, 1, 2, 3, 4, 5, 6, 7].filter((k) => b.mod & (1 << k)).length + (b.key ? 1 : 0) : 0);
+function pickerCats(o) {
+  return o.device === 'keyboard'
+    ? [['key', 'Keyboard'], ['windows', 'Windows'], ['media', 'Media'], ['integr', 'Integrations'], ['apps', 'Apps & sites'],
+      ['macro', 'Macros'], ['mouse', 'Mouse'], ['other', 'Other']]
+    : BTN_CATS;
+}
+function pickerBody(cat, cur, o) {
+  const tile = (b, label, sub, dis) => `<button class="act-tile ${sameBinding(cur, b) ? 'on' : ''}" ${dis ? 'disabled' : ''} data-b='${esc(JSON.stringify(b))}'><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
+  const kb = o.device === 'keyboard';
+  const keyCur = cur && cur.kind === 'key' ? cur : null;
+  const mods = keyCur ? keyCur.mod : 0;
+  const named = namedAction(cur);
+  if (cat === 'mouse') {
+    if (kb) return `<div class="act-group"><h3>Mouse</h3><div class="act-grid">${MOUSE_ACTS.slice(0, 2).map(([n, l]) => tile({ kind: 'mouse', btn: n }, l)).join('')}</div></div>`;
+    return `<div class="act-group"><h3>Mouse</h3><div class="act-grid">${MOUSE_ACTS.map(([n, l]) => tile({ kind: 'mouse', btn: n }, l)).join('')}</div></div>
+      <div class="act-group"><h3>Sensitivity</h3><div class="act-grid">${DPI_ACTS.map(([c, l, s]) => tile({ kind: 'special', code: c }, l, s)).join('')}</div>
+      ${cur && cur.kind === 'special' && cur.code === 7 ? `<div class="sniper">Sniper speed while held:
+        ${o.dpis.map((v, i) => `<button class="btn secondary snp ${i === o.shift ? 'on' : ''}" data-i="${i}">${v}</button>`).join('')}
+        <span class="msg" style="margin:0">Add a low speed on the Sensitivity tab if you want one just for this.</span></div>` : ''}</div>`;
+  }
+  if (cat === 'key') {
+    const keyOpts = Object.entries(HID_NAME).filter(([c]) => !isMod(+c)).sort((a, b) => a[0] - b[0])
+      .map(([c, n]) => `<option value="${c}" ${keyCur && keyCur.key === +c ? 'selected' : ''}>${esc(n)}</option>`).join('');
+    return `<div class="act-group"><h3>Any key or combo</h3>
+      <div class="keyrow">
+        <div class="keycap ${keyCur ? 'on' : ''}" tabindex="0">${keyCur ? esc(comboText(keyCur.mod, keyCur.key)) : 'Click here, then press a key or combo'}</div>
+        <select class="keysel"><option value="">Or pick a key…</option>${keyOpts}</select>
+      </div>
+      <div class="modrow">${MOD_NAMES.slice(0, 4).map((n, b) => `<button class="btn secondary modchip ${mods & (1 << b) ? 'on' : ''}" data-b="${b}">${n}</button>`).join('')}</div>
+      <div class="msg">${kb ? 'Up to 3 keys at once (Ctrl, Shift, Alt and Win count as keys).' : 'Held keys work too — a button set to Shift acts like holding Shift.'} Keys like F13–F24 are handy for game binds nothing else uses.</div></div>`;
+  }
+  if (cat === 'windows') {
+    return `<div class="act-group"><h3>Windows actions</h3><div class="act-grid">
+      ${WIN_ACTS.map(([l, b]) => tile(b, l, b.kind === 'key' ? comboText(b.mod, b.key) : '')).join('')}</div></div>`;
+  }
+  if (cat === 'media') {
+    return `<div class="act-group"><h3>Media</h3><div class="act-grid">${MEDIA_ACTS.map(([u, l]) => tile({ kind: 'media', usage: u }, l)).join('')}</div></div>`;
+  }
+  if (cat === 'integr') {
+    const cv = periphInteg.clipvault;
+    const cvTiles = cv ? CV_NAMES.map(([id, nm]) => {
+      const b = parseHotkey(cv.hotkeys[id]);
+      return b ? tile(b, nm, comboText(b.mod, b.key)) : '';
+    }).join('') : '';
+    const what = kb ? 'key' : 'mouse button';
+    return `<div class="act-group"><h3>ClipVault</h3>
+        ${cv ? `<div class="act-grid">${cvTiles}</div><div class="msg">Uses your ClipVault hotkeys${cv.defaults ? ' (its defaults)' : ''}. If you change one in ClipVault, pick it here again and save.</div>`
+          : '<div class="msg">ClipVault isn’t set up on this PC.</div>'}</div>
+      <div class="act-group"><h3>Discord</h3><div class="act-grid">${DISCORD_ACTS.map(([l, b]) => tile(b, l, comboText(b.mod, b.key))).join('')}</div></div>
+      <div class="act-group"><h3>OBS Studio</h3><div class="act-grid">${OBS_ACTS.map(([l, b]) => tile(b, l, comboText(b.mod, b.key))).join('')}</div></div>
+      ${named && named.setup ? `<div class="setup"><b>Link it once in ${named.app}</b><ol>
+        <li>Click <b>Save to ${kb ? 'keyboard' : 'mouse'}</b> below.</li>
+        ${named.app === 'Discord'
+          ? `<li>Discord → User Settings → <b>Keybinds</b> → <b>Add a Keybind</b>.</li><li>Action: <b>${esc(named.setup)}</b>, click <b>Record Keybind</b> and press this ${what}.</li>`
+          : `<li>OBS → Settings → <b>Hotkeys</b>, find <b>${esc(named.setup)}</b>.</li><li>Click the box next to each and press this ${what}, then <b>Apply</b>.</li>`}
+        <li>Done — it works even with RGB Studio closed.</li></ol></div>` : ''}`;
+  }
+  if (cat === 'apps') {
+    const acts = actions();
+    return `<div class="act-group"><h3>Open an app, game or website</h3><div class="act-grid">
+        ${acts.map((a) => tile(actionBinding(a), a.name, a.type === 'url' ? a.target.replace(/^https?:\/\//, '') : 'App', kb && usageCount(actionBinding(a)) > 3)).join('')}
+        <button class="act-tile add pick-app"><b>+ App or game…</b><small>Pick an .exe or shortcut</small></button></div>
+      <div class="site-add"><input type="text" class="site-url" placeholder="Website, e.g. youtube.com" spellcheck="false">
+        <input type="text" class="site-name" placeholder="Name (optional)" spellcheck="false"><button class="btn secondary site-btn">+ Add website</button></div>
+      ${acts.length ? `<div class="act-manage">${acts.map((a) => `<div class="am-row"><b>${esc(a.name)}</b><span title="${esc(a.target)}">${esc(a.target)}</span>
+        <button class="btn secondary am-test" data-id="${a.id}">Test</button><button class="btn secondary am-del" data-id="${a.id}">Remove</button></div>`).join('')}</div>` : ''}
+      <div class="msg">These are opened by RGB Studio, so it has to be running (it starts with Windows and sits in the tray). Everything else here works without it.</div></div>`;
+  }
+  if (cat === 'macro') {
+    return `<div class="act-group"><h3>Macros</h3><div class="act-grid">
+      ${macros().map((mc) => {
+        const mouseOnly = kb && mc.steps.some((s) => s.t === 'mouse');
+        return tile({ kind: 'macro', id: mc.id }, mc.name, mouseOnly ? 'Has mouse clicks — mouse only' : `${actionCount(mc.steps)} action${actionCount(mc.steps) === 1 ? '' : 's'}`, mouseOnly);
+      }).join('')}
+      <button class="act-tile add newmac"><b>+ New macro</b><small>Record one for this ${kb ? 'key' : 'button'}</small></button></div></div>`;
+  }
+  return `<div class="act-group"><h3>Other</h3><div class="act-grid">
+    ${kb ? '' : tile({ kind: 'special', code: 1 }, 'Scroll left') + tile({ kind: 'special', code: 2 }, 'Scroll right')}
+    ${tile({ kind: 'disabled' }, 'Disabled', kb ? 'Key does nothing' : 'Button does nothing')}</div></div>`;
+}
+// Wire up a picker rendered into `view`. set(binding) applies; err(text) shows a problem.
+function bindPicker(view, cur, set, o, err) {
+  const keyCur = cur && cur.kind === 'key' ? cur : null;
+  const mods = keyCur ? keyCur.mod : 0;
+  const kb = o.device === 'keyboard';
+  const setChecked = (b) => {
+    if (kb && usageCount(b) > 3) return err('The keyboard can press at most 3 keys at once (Ctrl, Shift, Alt and Win count).');
+    set(b);
+  };
+  view.querySelectorAll('.act-tile[data-b]').forEach((t) => { t.onclick = () => setChecked(JSON.parse(t.dataset.b)); });
+  view.querySelectorAll('.snp').forEach((b) => { b.onclick = () => o.onShift && o.onShift(+b.dataset.i); });
+  const nm = view.querySelector('.newmac');
+  if (nm) nm.onclick = () => {
+    const mc = newMacro(`Macro ${macros().length + 1}`);
+    persistMacros();
+    macroSel = mc.id;
+    o.onNewMacro(mc);
+  };
+  const cap = view.querySelector('.keycap');
+  if (cap) {
+    let lone = null;
+    cap.onkeydown = (ev) => {
+      ev.preventDefault();
+      if (ev.repeat) return;
+      const code = HID[ev.code];
+      if (code == null) return;
+      if (isMod(code)) { lone = code; cap.textContent = keyName(code) + ' + …'; return; }
+      lone = null;
+      const mod = (ev.ctrlKey ? 1 : 0) | (ev.shiftKey ? 2 : 0) | (ev.altKey ? 4 : 0) | (ev.metaKey ? 8 : 0);
+      setChecked({ kind: 'key', mod, key: code });
+    };
+    cap.onkeyup = (ev) => {
+      ev.preventDefault();
+      const code = HID[ev.code];
+      if (lone != null && code === lone) setChecked({ kind: 'key', mod: 1 << (code - 0xE0), key: 0 });
+      lone = null;
+    };
+    cap.onfocus = () => { if (!keyCur) cap.textContent = 'Press a key or combo now…'; };
+    cap.onblur = () => { if (!keyCur) cap.textContent = 'Click here, then press a key or combo'; };
+    view.querySelector('.keysel').onchange = (ev) => { if (ev.target.value) setChecked({ kind: 'key', mod: mods, key: +ev.target.value }); };
+    view.querySelectorAll('.modchip').forEach((c) => {
+      c.onclick = () => {
+        const nmod = mods ^ (1 << +c.dataset.b);
+        const key = keyCur ? keyCur.key : 0;
+        if (!nmod && !key) return;
+        setChecked({ kind: 'key', mod: nmod, key });
+      };
+    });
+  }
+  const full = () => err('No spare hotkeys left - remove an app or website first.');
+  const pick = view.querySelector('.pick-app');
+  if (pick) pick.onclick = async () => {
+    const r = await window.rgb.periph.pickApp();
+    if (!r || !r.ok) return;
+    const a = newAction(r.name, r.path, 'app');
+    if (!a) return full();
+    persistActions();
+    setChecked(actionBinding(a));
+  };
+  const siteBtn = view.querySelector('.site-btn');
+  if (siteBtn) {
+    const add = () => {
+      let url = view.querySelector('.site-url').value.trim();
+      if (!url) return;
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = 'https://' + url;
+      let name = view.querySelector('.site-name').value.trim();
+      if (!name) { try { name = new URL(url).hostname.replace(/^www\./, ''); } catch (_) { name = url; } }
+      const a = newAction(name, url, 'url');
+      if (!a) return full();
+      persistActions();
+      setChecked(actionBinding(a));
+    };
+    siteBtn.onclick = add;
+    view.querySelector('.site-url').onkeydown = (ev) => { if (ev.key === 'Enter') add(); };
+  }
+  view.querySelectorAll('.am-test').forEach((b) => { b.onclick = () => window.rgb.periph.runAction(actions().find((a) => a.id === b.dataset.id)); });
+  view.querySelectorAll('.am-del').forEach((b) => {
+    b.onclick = () => {
+      const a = actions().find((x) => x.id === b.dataset.id);
+      if (!a) return;
+      const hk = actionBinding(a);
+      const users = periphSlotsAll().filter((s) => sameBinding(s.get(), hk));
+      if (users.length && !confirm(`"${a.name}" is on ${users.map((s) => s.label).join(', ')}. Remove it and put ${users.length > 1 ? 'those' : 'that'} back to default?`)) return;
+      users.forEach((s) => s.reset());
+      periphActions = actions().filter((x) => x.id !== a.id);
+      persistActions();
+      renderPeriph();
+    };
+  });
+}
+
+// Every bindable slot on every device (for "used by" and clean-up when a macro
+// or app action is deleted). get() -> binding, set(b), reset() -> default.
+function periphSlots(m) {
+  if (!m || !m.edit) return [];
+  if (m.kind === 'keyboard') {
+    return m.keys.filter((k) => !k.fn).map((k) => ({
+      label: kbLong(k.name), id: k.pos,
+      get: () => m.edit.keys[k.pos].b,
+      set: (b) => { m.edit.keys[k.pos].b = b; },
+      reset: () => { m.edit.keys[k.pos].b = JSON.parse(JSON.stringify(m.origB[k.pos])); },
+    }));
+  }
+  if (!m.edit.buttons || !m.buttons) return [];
+  return m.buttons.map((b, k) => (b.present ? {
+    label: b.label, id: k,
+    get: () => m.edit.buttons[k],
+    set: (x) => { m.edit.buttons[k] = x; },
+    reset: () => { const f = b.factory; m.edit.buttons[k] = f ? importBinding(f, m, k) : { kind: 'disabled' }; },
+  } : null)).filter(Boolean);
+}
+const periphSlotsAll = () => periphMice.flatMap(periphSlots);
+
+// ---- MonsGeek keyboard ---------------------------------------------------------
+const KB_SHORT = { LShf: 'Shift', RShf: 'Shift', LCtl: 'Ctrl', RCtl: 'Ctrl', LAlt: 'Alt', RAlt: 'Alt', Spc: '', Bksp: 'Backspace',
+  Ent: 'Enter', Caps: 'Caps', IntlBs: '\\', IntlRo: '#', Left: '←', Right: '→', Up: '↑', Down: '↓' };
+const KB_LONG = { LShf: 'Left Shift', RShf: 'Right Shift', LCtl: 'Left Ctrl', RCtl: 'Right Ctrl', LAlt: 'Left Alt', RAlt: 'Right Alt',
+  Spc: 'Space', Bksp: 'Backspace', Ent: 'Enter', Caps: 'Caps Lock', Win: 'Windows key', Esc: 'Escape', Del: 'Delete',
+  PgUp: 'Page Up', PgDn: 'Page Down', IntlBs: 'ISO \\', IntlRo: 'ISO #', Left: 'Left arrow', Right: 'Right arrow', Up: 'Up arrow', Down: 'Down arrow' };
+const KB_W = { Bksp: 2, Tab: 1.5, '\\': 1.5, Caps: 1.75, Ent: 2.25, LShf: 2.25, RShf: 1.75, LCtl: 1.25, Win: 1.25, LAlt: 1.25, Spc: 6.25 };
+const kbLong = (n) => KB_LONG[n] || (n.length === 1 ? n.toUpperCase() + ' key' : n);
+const KB_MAG = ['press', 'lift', 'rtPress', 'rtLift', 'bdz', 'tdz'];
+
+function kbFromScan(k, prev) {
+  const dev = { kind: 'keyboard', id: k.id, name: k.name, writable: true, kb: k, factor: k.factor || 100, keys: k.keys,
+    macroRoom: k.macroRoom || 252, view: prev ? prev.view : 'act', sel: prev ? prev.sel : null, rsel: prev ? prev.rsel : null };
+  const imp = (b, key) => importBinding({ ...b, label: kbLong(key.name) }, dev, key.pos);
+  dev.edit = { polling: k.polling, keys: {} };
+  dev.origB = {};
+  for (const key of k.keys) {
+    const v = { b: imp(key.binding, key) };
+    for (const n of KB_MAG) v[n] = key[n];
+    v.rt = key.rt;
+    dev.edit.keys[key.pos] = v;
+    dev.origB[key.pos] = imp(key.orig, key);
+  }
+  if (!dev.sel) dev.sel = new Set(k.keys.map((x) => x.pos));
+  dev.base = JSON.parse(JSON.stringify(dev.edit));
+  dev.orig = kbSig(dev);
+  return dev;
+}
+const sigB = (b) => (b && b.kind === 'macro' ? 'M:' + stepsKey(resolveBinding(b).steps) : JSON.stringify(b));
+function kbSig(dev) {
+  const e = dev.edit;
+  return JSON.stringify([e.polling, Object.entries(e.keys).map(([p, v]) => [p, ...KB_MAG.map((n) => v[n]), v.rt, sigB(v.b)])]);
+}
+function kbWant(dev) {
+  const want = { mag: {}, rt: {}, keys: {} };
+  for (const [p, v] of Object.entries(dev.edit.keys)) {
+    const o = dev.base.keys[p];
+    for (const n of KB_MAG) if (v[n] != null && v[n] !== o[n]) (want.mag[n] = want.mag[n] || {})[p] = v[n];
+    if (v.rt !== o.rt) want.rt[p] = v.rt;
+    if (sigB(v.b) !== sigB(o.b)) want.keys[p] = resolveBinding(v.b);
+  }
+  if (dev.edit.polling !== dev.base.polling) want.polling = dev.edit.polling;
+  return want;
+}
+const kbMacroBytes = (steps) => {
+  let n = 4;
+  let pend = null;
+  const flush = () => { if (pend) { n += (pend.d >= 1 && pend.d <= 127) || (pend.down && pend.d === 0) ? 2 : 4; pend = null; } };
+  for (const s of steps || []) {
+    if (s.t === 'delay') { if (pend) pend.d += s.ms; } else { flush(); pend = { down: s.down, d: 0 }; }
+  }
+  flush();
+  return n;
+};
+
+// The visual keyboard. opts: { sub(key) -> html, cls(key) -> string, sel(key) -> bool }
+function kbBoard(dev, opts) {
+  const rows = [[], [], [], [], [], []];
+  for (const k of dev.keys) rows[k.row].push(k);
+  const iso = dev.keys.some((k) => k.name === 'IntlBs');
+  return `<div class="kbd">${rows.map((r, ri) => `<div class="krow ${ri === 0 ? 'fnrow' : ''}">${r.sort((a, b) => a.col - b.col).map((k) => {
+    let w = KB_W[k.name] || 1;
+    if (iso && k.name === 'LShf') w = 1.25;
+    const label = k.name in KB_SHORT ? KB_SHORT[k.name] : k.name;
+    return `<button class="kkey ${opts.sel(k) ? 'sel' : ''} ${opts.cls(k)}" data-pos="${k.pos}" style="--w:${w}" title="${esc(kbLong(k.name))}">
+      <span class="kl">${esc(label)}</span><span class="ks">${opts.sub(k)}</span></button>`;
+  }).join('')}</div>`).join('')}</div>`;
+}
+
+function renderKeyboard(grid, dev) {
+  if (dev.view !== 'macros') stopRecording();
+  const dirty = kbSig(dev) !== dev.orig;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; flex-direction:column; gap:16px; flex:1 0 auto';
+  const views = [['act', 'Actuation & Rapid Trigger', '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>'],
+    ['remap', 'Key remaps', '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/>'],
+    ['macros', 'Macros', '<path d="M5 4v16M9 8l10 4-10 4z"/>']];
+  wrap.innerHTML = `<div class="psub">${views.map(([v, label, icon]) =>
+    `<button class="psub-btn ${dev.view === v ? 'on' : ''}" data-v="${v}"><svg viewBox="0 0 24 24">${icon}</svg>${label}</button>`).join('')}</div>
+    <div class="pview"></div>
+    <div class="savebar">
+      <span class="state ${dirty ? 'dirty' : ''}">${dirty ? '● Unsaved changes' : 'Everything is saved on the keyboard.'}</span>
+      <span class="msg pmsg" style="margin:0"></span>
+      <button class="btn secondary restore" title="Put back what the keyboard had before RGB Studio first changed it">Restore original</button>
+      <button class="btn save" ${dirty ? '' : 'disabled'}>Save to keyboard</button>
+    </div>`;
+  grid.appendChild(wrap);
+  wrap.querySelectorAll('.psub-btn').forEach((b) => { b.onclick = () => { dev.view = b.dataset.v; renderPeriph(); }; });
+  const view = wrap.querySelector('.pview');
+  if (dev.view === 'remap') renderKbRemap(view, dev);
+  else if (dev.view === 'macros') renderMacrosView(view, dev);
+  else renderKbAct(view, dev);
+  const msg = wrap.querySelector('.pmsg');
+  const reload = (r, text) => {
+    const i = periphMice.indexOf(dev);
+    if (i >= 0) periphMice[i] = kbFromScan(r.keyboard, dev);
+    renderPeriph();
+    const n = $('#periphGrid .pmsg');
+    if (n) { n.className = 'msg pmsg ok'; n.textContent = text; }
+  };
+  wrap.querySelector('.save').onclick = async () => {
+    stopRecording();
+    msg.className = 'msg pmsg'; msg.textContent = 'Saving… (a few seconds)';
+    wrap.querySelector('.save').disabled = true;
+    const r = await window.rgb.periph.kbSave(kbWant(dev));
+    if (r.ok && r.keyboard) reload(r, 'Saved to the keyboard.');
+    else { msg.className = 'msg pmsg err'; msg.textContent = r.error || 'Save failed'; wrap.querySelector('.save').disabled = false; }
+  };
+  wrap.querySelector('.restore').onclick = async () => {
+    stopRecording();
+    if (!confirm('Put the keyboard back to how it was before RGB Studio changed it (actuation, Rapid Trigger, remaps, polling)?')) return;
+    msg.className = 'msg pmsg'; msg.textContent = 'Restoring…';
+    const r = await window.rgb.periph.kbRestore();
+    if (r.ok && r.keyboard) reload(r, 'Original settings restored.');
+    else { msg.className = 'msg pmsg err'; msg.textContent = r.error || 'Restore failed'; }
+  };
+}
+
+function renderKbAct(view, dev) {
+  const f = dev.factor;
+  const e = dev.edit;
+  const mm = (raw) => (raw / f).toFixed(2);
+  const toRaw = (v) => Math.max(1, Math.round(+v * f));
+  const sel = dev.keys.filter((k) => dev.sel.has(k.pos));
+  const first = sel.length ? e.keys[sel[0].pos] : null;
+  const mixed = (n) => sel.some((k) => e.keys[k.pos][n] !== first[n]);
+  const step = f >= 100 ? 0.01 : 0.1;
+  const maxAct = Math.max(3.4, ...dev.keys.map((k) => (e.keys[k.pos].press || 0) / f));
+  const slider = (n, label, min, max, hint) => `<div class="kslide" data-n="${n}">
+      <div class="kslide-top"><b>${label}</b>${mixed(n) ? '<span class="mixed">mixed</span>' : ''}<span class="kval"><input type="number" class="knum" min="${min}" max="${max}" step="${step}" value="${mm(first[n] || 0)}"> mm</span></div>
+      <input type="range" class="krange" min="${min}" max="${max}" step="${step}" value="${mm(first[n] || 0)}">
+      ${hint ? `<div class="msg" style="margin:2px 0 0">${hint}</div>` : ''}</div>`;
+  const anyRt = sel.some((k) => e.keys[k.pos].rt);
+  const allRt = sel.length && sel.every((k) => e.keys[k.pos].rt);
+  const names = sel.length === dev.keys.length ? `All ${sel.length} keys` : sel.length > 8 ? `${sel.length} keys`
+    : sel.map((k) => (k.name in KB_SHORT && KB_SHORT[k.name] ? KB_SHORT[k.name] : k.name === 'Spc' ? 'Space' : k.name)).join(' · ');
+
+  view.innerHTML = `
+    <div class="card kb-card">
+      <div class="kb-tools">
+        <span class="msg" style="margin:0">Click keys to pick which ones to change.</span>
+        <span style="flex:1"></span>
+        <button class="btn secondary ksel" data-s="all">All keys</button>
+        <button class="btn secondary ksel" data-s="wasd">WASD</button>
+        <button class="btn secondary ksel" data-s="letters">Letters</button>
+        <button class="btn secondary ksel" data-s="none">Clear</button>
+      </div>
+      ${kbBoard(dev, {
+        sel: (k) => dev.sel.has(k.pos),
+        cls: (k) => (e.keys[k.pos].rt ? 'rt' : '') + (KB_MAG.some((n) => e.keys[k.pos][n] !== dev.base.keys[k.pos][n]) || e.keys[k.pos].rt !== dev.base.keys[k.pos].rt ? ' changed' : ''),
+        sub: (k) => `${(e.keys[k.pos].press / f).toFixed(2).replace(/0$/, '')}${e.keys[k.pos].rt ? '<i class="bolt">⚡</i>' : ''}`,
+      })}
+      <div class="kb-legend"><span><i class="bolt">⚡</i> Rapid Trigger on</span><span>Numbers = actuation point (mm)</span><span class="lg-changed">Unsaved change</span></div>
+    </div>
+    <div class="kb-bottom">
+      <div class="card kb-edit">
+        ${!sel.length ? '<div class="msg hint">Pick one or more keys above (or <b>All keys</b>) to change them.</div>' : `
+        <div class="kb-edit-head"><div><div class="pb-title">${esc(names)}</div><div class="msg" style="margin:2px 0 0">Changes apply to the picked keys.</div></div>
+          <div class="presets">
+            <button class="btn secondary kpre" data-p="fast" title="0.5 mm actuation, Rapid Trigger 0.15 mm">Fast (gaming)</button>
+            <button class="btn secondary kpre" data-p="bal" title="1.2 mm, no Rapid Trigger">Balanced</button>
+            <button class="btn secondary kpre" data-p="type" title="2.0 mm, no Rapid Trigger">Typing</button>
+            <button class="btn secondary kpre" data-p="orig" title="Back to what's saved on the keyboard">Undo changes</button>
+          </div></div>
+        ${slider('press', 'Actuation point', 0.1, maxAct.toFixed(2), 'How far you press before the key counts. Lower = faster, but easier to mis-press.')}
+        <div class="rt-row">
+          <label class="switch"><input type="checkbox" class="rt-on" ${allRt ? 'checked' : ''}><span></span></label>
+          <div><b>Rapid Trigger</b>${anyRt && !allRt ? '<span class="mixed">mixed</span>' : ''}<div class="msg" style="margin:2px 0 0">The key resets as soon as you start lifting, and fires again as soon as you press back down — no fixed point.</div></div>
+        </div>
+        ${allRt ? `<div class="kslides2">${slider('rtPress', 'Press sensitivity', step, 2, 'Distance down to fire again.')}${slider('rtLift', 'Release sensitivity', step, 2, 'Distance up to release.')}</div>`
+          : slider('lift', 'Release point', 0.1, maxAct.toFixed(2), 'Where the key lets go when you lift.')}
+        ${dev.kb.deadzones ? `<details class="adv kdz"><summary>Dead zones</summary>
+          <div class="kslides2">${slider('tdz', 'Top dead zone', 0, 1, 'Ignore this much at the top (stops accidental presses).')}${slider('bdz', 'Bottom dead zone', 0, 1, 'Ignore this much at the bottom.')}</div></details>` : ''}`}
+      </div>
+      <div class="card kb-side">
+        <h2>Polling rate</h2>
+        <div class="msg" style="margin:-6px 0 12px">How often the keyboard reports to the PC.</div>
+        <div class="rates-big kb-rates">${(dev.kb.pollRates || []).map((hz) => `<button class="rate-btn ${hz === e.polling ? 'on' : ''}" data-hz="${hz}"><b>${hz >= 1000 ? hz / 1000 + 'K' : hz} Hz</b><small>${(1000 / hz).toString().replace(/(\.\d{3})\d+/, '$1')} ms</small></button>`).join('')}</div>
+        <div class="msg" style="margin-top:10px">Firmware ${esc(dev.kb.firmware || '')} · profile ${dev.kb.profile + 1} · ${f === 200 ? '0.005' : f === 100 ? '0.01' : '0.1'} mm steps</div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('.kkey').forEach((b) => {
+    b.onclick = () => { const p = +b.dataset.pos; if (dev.sel.has(p)) dev.sel.delete(p); else dev.sel.add(p); renderPeriph(); };
+  });
+  const groups = {
+    all: () => dev.keys.map((k) => k.pos),
+    none: () => [],
+    wasd: () => dev.keys.filter((k) => ['W', 'A', 'S', 'D'].includes(k.name)).map((k) => k.pos),
+    letters: () => dev.keys.filter((k) => /^[A-Z]$/.test(k.name)).map((k) => k.pos),
+  };
+  view.querySelectorAll('.ksel').forEach((b) => { b.onclick = () => { dev.sel = new Set(groups[b.dataset.s]()); renderPeriph(); }; });
+  const setAll = (n, raw) => { for (const k of sel) e.keys[k.pos][n] = raw; };
+  view.querySelectorAll('.kslide').forEach((box) => {
+    const n = box.dataset.n;
+    const num = box.querySelector('.knum');
+    const rng = box.querySelector('.krange');
+    const apply = (v) => { const raw = n === 'tdz' || n === 'bdz' ? Math.max(0, Math.round(+v * f)) : toRaw(v); setAll(n, raw); renderPeriph(); };
+    rng.oninput = () => { num.value = (+rng.value).toFixed(2); };
+    rng.onchange = () => apply(rng.value);
+    num.onchange = () => apply(num.value);
+    num.onkeydown = (ev) => { if (ev.key === 'Enter') num.blur(); };
+  });
+  const rt = view.querySelector('.rt-on');
+  if (rt) rt.onchange = () => {
+    for (const k of sel) {
+      const v = e.keys[k.pos];
+      v.rt = rt.checked;
+      if (rt.checked) {                      // sensible starting sensitivity if it was never set
+        if (!v.rtPress) v.rtPress = Math.round(0.15 * f);
+        if (!v.rtLift) v.rtLift = Math.round(0.15 * f);
+      }
+    }
+    renderPeriph();
+  };
+  view.querySelectorAll('.kpre').forEach((b) => {
+    b.onclick = () => {
+      for (const k of sel) {
+        const v = e.keys[k.pos];
+        if (b.dataset.p === 'orig') { Object.assign(v, JSON.parse(JSON.stringify({ ...dev.base.keys[k.pos], b: v.b }))); continue; }
+        const [act, rtOn, sens] = { fast: [0.5, true, 0.15], bal: [1.2, false, 0], type: [2.0, false, 0] }[b.dataset.p];
+        v.press = Math.round(act * f);
+        v.lift = Math.round(act * f);
+        v.rt = rtOn;
+        if (rtOn) { v.rtPress = Math.round(sens * f); v.rtLift = Math.round(sens * f); }
+      }
+      renderPeriph();
+    };
+  });
+  view.querySelectorAll('.kb-rates .rate-btn').forEach((b) => { b.onclick = () => { e.polling = +b.dataset.hz; renderPeriph(); }; });
+}
+
+function renderKbRemap(view, dev) {
+  const e = dev.edit;
+  if (dev.rsel == null || !e.keys[dev.rsel]) dev.rsel = (dev.keys.find((k) => k.name === 'Caps') || dev.keys[0]).pos;
+  const key = dev.keys.find((k) => k.pos === dev.rsel);
+  const cur = e.keys[key.pos].b;
+  const o = { device: 'keyboard', onNewMacro: (mc) => { e.keys[key.pos].b = { kind: 'macro', id: mc.id }; dev.view = 'macros'; renderPeriph(); } };
+  if (!dev.rcat) dev.rcat = catOf(cur) === 'other' && cur.kind === 'raw' ? 'key' : catOf(cur);
+  const isDefault = sigB(cur) === sigB(dev.origB[key.pos]);
+  const short = (b, k) => {
+    if (!b || sigB(b) === sigB(dev.origB[k.pos])) return '';
+    const t = bindText(b);
+    return esc(t.length > 12 ? t.slice(0, 11) + '…' : t);
+  };
+  view.innerHTML = `
+    <div class="card kb-card">
+      <div class="kb-tools"><span class="msg" style="margin:0">Click a key to change what it does. Changed keys show their new job.</span></div>
+      ${kbBoard(dev, {
+        sel: (k) => k.pos === key.pos,
+        cls: (k) => (sigB(e.keys[k.pos].b) !== sigB(dev.origB[k.pos]) ? 'remapped' : '') + (sigB(e.keys[k.pos].b) !== sigB(dev.base.keys[k.pos].b) ? ' changed' : '') + (k.fn ? ' fnkey' : ''),
+        sub: (k) => short(e.keys[k.pos].b, k),
+      })}
+    </div>
+    <div class="card pbtn-right kb-remap-edit">
+      <div class="pb-head">
+        <div><div class="pb-title">${esc(kbLong(key.name))}</div><div class="msg" style="margin:2px 0 0">Does: <b>${esc(key.fn ? 'Fn (layer key)' : bindText(cur))}</b></div></div>
+        ${!key.fn && !isDefault ? '<button class="btn secondary kb-reset">Back to default</button>' : ''}
+      </div>
+      ${key.fn ? '<div class="msg hint">The Fn key runs the keyboard’s own shortcuts (media, lighting, profiles), so it can’t be remapped here.</div>' : `
+      ${cur && cur.kind === 'raw' ? `<div class="pb-warn">This key has a setting made in the MonsGeek app (${esc(cur.note || 'unknown type')}). It stays as it is unless you pick something new.</div>` : ''}
+      <div class="bcats">${pickerCats(o).map(([c, l]) => `<button class="bcat ${c === dev.rcat ? 'on' : ''} ${c === catOf(cur) ? 'has' : ''}" data-c="${c}">${l}</button>`).join('')}</div>
+      <div class="bcat-body">${pickerBody(dev.rcat, cur, o)}</div>
+      <div class="pmsg2 msg"></div>`}
+    </div>`;
+  view.querySelectorAll('.kkey').forEach((b) => { b.onclick = () => { dev.rsel = +b.dataset.pos; dev.rcat = null; renderPeriph(); }; });
+  if (key.fn) return;
+  view.querySelectorAll('.bcat').forEach((b) => { b.onclick = () => { dev.rcat = b.dataset.c; renderPeriph(); }; });
+  const reset = view.querySelector('.kb-reset');
+  if (reset) reset.onclick = () => { e.keys[key.pos].b = JSON.parse(JSON.stringify(dev.origB[key.pos])); dev.rcat = null; renderPeriph(); };
+  const note = view.querySelector('.pmsg2');
+  bindPicker(view, cur, (b) => { e.keys[key.pos].b = b; renderPeriph(); }, o, (t) => { note.className = 'pmsg2 msg err'; note.textContent = t; });
+}
+
+// ---- Macros -----------------------------------------------------------------
+function stopRecording() {
+  if (keyWait) { window.removeEventListener('keydown', keyWait, true); keyWait = null; }
+  if (!recState) return;
+  window.removeEventListener('keydown', recState.onKey, true);
+  window.removeEventListener('keyup', recState.onKey, true);
+  const mc = macroById(recState.id);
+  if (mc) for (const c of recState.down) mc.steps.push({ t: 'key', code: c, down: false });
+  recState = null;
+  persistMacros();
+}
+
+function startRecording(mc, room, rerender) {
+  stopRecording();
+  if (document.activeElement) document.activeElement.blur();
+  const rec = { id: mc.id, last: 0, down: new Set() };
+  rec.onKey = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const code = HID[ev.code];
+    if (ev.repeat || code == null) return;
+    const down = ev.type === 'keydown';
+    if (down === rec.down.has(code)) return;
+    if (down) rec.down.add(code); else rec.down.delete(code);
+    const now = performance.now();
+    if (rec.last && recDelays) mc.steps.push({ t: 'delay', ms: Math.max(5, Math.min(10000, Math.round((now - rec.last) / 5) * 5)) });
+    rec.last = now;
+    mc.steps.push({ t: 'key', code, down });
+    if (macroBytes(mc.steps) + rec.down.size * 3 >= room) stopRecording();
+    rerender();
+  };
+  window.addEventListener('keydown', rec.onKey, true);
+  window.addEventListener('keyup', rec.onKey, true);
+  recState = rec;
+}
+
+function renderMacrosView(view, m) {
+  const e = m.edit;
+  const kbd = m.kind === 'keyboard';
+  const room = m.macroRoom || 248;
+  const bytesOf = kbd ? kbMacroBytes : macroBytes;
+  const slots = periphSlots(m);
+  const list = macros();
+  if (macroSel && !macroById(macroSel)) macroSel = null;
+  if (!macroSel && list.length) macroSel = list[0].id;
+  const mc = macroById(macroSel);
+  const usedBy = (id) => periphSlotsAll().filter((s) => { const b = s.get(); return b && b.kind === 'macro' && b.id === id; }).map((s) => s.label);
+  const rec = recState && mc && recState.id === mc.id;
+
+  let editor = `<div class="msg hint" style="margin:auto">Make a macro to play a key sequence from one ${kbd ? 'key' : 'mouse button'}.</div>`;
+  if (mc) {
+    const bytes = bytesOf(mc.steps);
+    const where = usedBy(mc.id);
+    const btnOpts = slots.map((s, i) => `<option value="${i}">${esc(s.label)}</option>`).join('');
+    const hasClicks = mc.steps.some((s) => s.t === 'mouse');
+    editor = `
+      <div class="mac-head">
+        <input type="text" class="mac-name" value="${esc(mc.name)}" maxlength="40" spellcheck="false">
+        <button class="btn secondary mac-del" title="Delete this macro">Delete</button>
+      </div>
+      <div class="mac-rec">
+        <button class="btn rec-btn ${rec ? 'live' : ''}">${rec ? '■ Stop recording' : '● Record keys'}</button>
+        <label class="toggle-line"><input type="checkbox" class="rec-delays" ${recDelays ? 'checked' : ''}> Record the pauses between keys</label>
+        ${rec ? '<span class="rec-hint">Recording — type your keys now. Mouse clicks aren’t recorded (add them below).</span>' : ''}
+      </div>
+      <div class="steps">${mc.steps.length ? stepRows(mc.steps).map((g) => (g.kind === 'delay'
+        ? `<div class="step delay"><span class="ico">\u23F1</span>Wait <input class="dms" data-i="${g.i}" type="number" min="1" max="10000" value="${g.ms}"> ms<button class="x" data-i="${g.i}" data-n="1" title="Remove">\u00d7</button></div>`
+        : g.kind === 'tap'
+        ? `<div class="step tap"><span class="ico">\u25CF</span><b>${esc(g.label)}</b>${g.hold != null ? `<span class="hold">held <input class="dms" data-i="${g.hold}" type="number" min="1" max="10000" value="${mc.steps[g.hold].ms}"> ms</span>` : ''}<button class="x" data-i="${g.i}" data-n="${g.n}" title="Remove">\u00d7</button></div>`
+        : `<div class="step ${g.down ? 'down' : 'up'}"><span class="ico">${g.down ? '\u2193' : '\u2191'}</span>${esc(g.label)}<button class="x" data-i="${g.i}" data-n="1" title="Remove">\u00d7</button></div>`)).join('')
+        : '<div class="msg" style="margin:8px">Empty \u2014 press Record and type, or add steps below.</div>'}</div>
+      <div class="mac-add">
+        <button class="btn secondary add-key">+ Key press</button>
+        ${kbd ? '' : '<button class="btn secondary add-click">+ Left click</button><button class="btn secondary add-rclick">+ Right click</button>'}
+        <button class="btn secondary add-delay">+ Pause</button>
+        <input type="text" class="add-text-in" placeholder="Type text to add…" maxlength="60">
+        <button class="btn secondary add-text">+ Add text</button>
+        <button class="btn secondary mac-clear" ${mc.steps.length ? '' : 'disabled'}>Clear</button>
+      </div>
+      <div class="mac-foot">
+        <div class="meter"><div style="width:${Math.min(100, bytes / room * 100)}%" class="${bytes > room ? 'over' : ''}"></div></div>
+        <span class="msg" style="margin:0">${kbd && hasClicks ? 'Mouse clicks in a macro only work on the mouse \u2014 remove them to use this on the keyboard.' : bytes > room ? `Too long to fit on the ${kbd ? 'keyboard' : 'mouse'} \u2014 remove some steps.` : `Uses ${bytes} of ${room} bytes on the ${kbd ? 'keyboard' : 'mouse'}.`}</span>
+        <span style="flex:1"></span>
+        <span class="msg" style="margin:0">${where.length ? 'On: ' + esc(where.join(', ')) : 'Not on a button yet'}</span>
+        <select class="assign"><option value="">Put on ${kbd ? 'key' : 'button'}\u2026</option>${btnOpts}</select>
+      </div>`;
+  }
+
+  view.innerHTML = `
+    <div class="pmouse mac-layout">
+      <div class="card mac-list">
+        <div class="mac-list-head"><h2>Macros</h2><button class="btn mac-new">+ New</button></div>
+        ${list.length ? list.map((x) => {
+          const n = actionCount(x.steps);
+          const w = usedBy(x.id);
+          return `<button class="mac-item ${x.id === macroSel ? 'on' : ''}" data-id="${x.id}"><b>${esc(x.name)}</b>
+            <small>${n} action${n === 1 ? '' : 's'} · ${w.length ? esc(w.join(', ')) : 'not on a button'}</small></button>`;
+        }).join('') : '<div class="msg">No macros yet.</div>'}
+        <div class="msg" style="margin-top:auto">Macros are stored on the ${kbd ? 'keyboard' : 'mouse'} itself, so they work without RGB Studio running. The same list is shared by your mouse and keyboard. Save after changing one that\u2019s in use.</div>
+      </div>
+      <div class="card mac-edit">${editor}</div>
+    </div>`;
+
+  const rerender = () => renderPeriph();
+  view.querySelector('.mac-new').onclick = () => { stopRecording(); const n = newMacro(`Macro ${list.length + 1}`); persistMacros(); macroSel = n.id; rerender(); };
+  view.querySelectorAll('.mac-item').forEach((b) => { b.onclick = () => { stopRecording(); macroSel = b.dataset.id; rerender(); }; });
+  if (!mc) return;
+  view.querySelector('.mac-name').onchange = (ev) => { mc.name = ev.target.value.trim() || mc.name; persistMacros(); rerender(); };
+  view.querySelector('.mac-del').onclick = () => {
+    stopRecording();
+    const where = usedBy(mc.id);
+    if (where.length && !confirm(`"${mc.name}" is on ${where.join(', ')}. Delete it and put those back to default?`)) return;
+    periphSlotsAll().forEach((s) => { const b = s.get(); if (b && b.kind === 'macro' && b.id === mc.id) s.reset(); });
+    periphMacros = list.filter((x) => x.id !== mc.id);
+    persistMacros();
+    macroSel = null;
+    rerender();
+  };
+  view.querySelector('.rec-btn').onclick = () => {
+    if (rec) { stopRecording(); rerender(); return; }
+    startRecording(mc, room, rerender);
+    rerender();
+  };
+  view.querySelector('.rec-delays').onchange = (ev) => { recDelays = ev.target.checked; };
+  view.querySelectorAll('.step .x').forEach((b) => { b.onclick = () => { stopRecording(); mc.steps.splice(+b.dataset.i, +b.dataset.n || 1); persistMacros(); rerender(); }; });
+  view.querySelectorAll('.dms').forEach((inp) => {
+    inp.onchange = () => { mc.steps[+inp.dataset.i].ms = Math.max(1, Math.min(10000, Math.round(+inp.value || 1))); persistMacros(); rerender(); };
+  });
+  const push = (...steps) => { stopRecording(); mc.steps.push(...steps); persistMacros(); rerender(); };
+  const tap = (s) => [{ ...s, down: true }, { t: 'delay', ms: 20 }, { ...s, down: false }];
+  if (!kbd) {
+    view.querySelector('.add-click').onclick = () => push(...tap({ t: 'mouse', btn: 1 }));
+    view.querySelector('.add-rclick').onclick = () => push(...tap({ t: 'mouse', btn: 2 }));
+  }
+  view.querySelector('.add-delay').onclick = () => push({ t: 'delay', ms: 100 });
+  const addKey = view.querySelector('.add-key');
+  addKey.onclick = () => {
+    stopRecording();
+    addKey.textContent = 'Press a key…';
+    addKey.classList.add('waiting');
+    keyWait = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const code = HID[ev.code];
+      if (code == null || ev.repeat) return;
+      window.removeEventListener('keydown', keyWait, true);
+      keyWait = null;
+      push(...tap({ t: 'key', code }));
+    };
+    window.addEventListener('keydown', keyWait, true);
+  };
+  const txt = view.querySelector('.add-text-in');
+  const addText = () => { const s = textSteps(txt.value); if (s.length) push(...s); };
+  view.querySelector('.add-text').onclick = addText;
+  txt.onkeydown = (ev) => { if (ev.key === 'Enter') addText(); };
+  view.querySelector('.mac-clear').onclick = () => { if (confirm('Remove every step from this macro?')) { stopRecording(); mc.steps = []; persistMacros(); rerender(); } };
+  view.querySelector('.assign').onchange = (ev) => {
+    if (ev.target.value === '') return;
+    slots[+ev.target.value].set({ kind: 'macro', id: mc.id });
+    rerender();
+  };
+}
+$('#btnPeriphScan').onclick = periphScan;
+document.querySelector('nav button[data-page="periph"]').addEventListener('click', () => { if (!periphScanned) { periphScanned = true; periphScan(); } });
+
+// ---- Settings page ----
+// Same named presets as ClipVault / PC Shield: (label, accent, accent2, bg, panel).
+const THEMES = {
+  ynzie:  ['Cotton Candy', '#ff7ac8', '#7fd6ff', '#0b0b10', '#14141c'],
+  kara:   ['Royal Purple', '#a970ff', '#e3b3ff', '#0c0911', '#16111f'],
+  kaleb:  ['Crimson',      '#ff3b4e', '#ff9aa5', '#0b0909', '#171112'],
+  james:  ['Toxic Green',  '#3dff8b', '#b6ffd3', '#080c0a', '#101813'],
+  dnarte: ['Deep Blue',    '#3d7bff', '#9ec0ff', '#07090f', '#0f1422'],
+  medal:  ['Lime',         '#c6f432', '#eaffb0', '#0a0b08', '#141611'],
+};
+let appSettings = {};
+
+const hexRgb = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+const mix = (a, b, t) => '#' + hexRgb(a).map((v, k) => Math.round(v + (hexRgb(b)[k] - v) * t).toString(16).padStart(2, '0')).join('');
+const alpha = (h, a) => `rgba(${hexRgb(h).join(',')},${a})`;
+
+function applyAppearance() {
+  const key = THEMES[appSettings.theme] ? appSettings.theme : 'ynzie';
+  const [, a1, a2, bg, panel] = THEMES[key];
+  const [r, g, b] = hexRgb(a1);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const vars = {
+    '--bg': bg, '--panel': panel, '--panel2': mix(panel, '#ffffff', 0.04), '--panel3': mix(panel, '#ffffff', 0.08),
+    '--border': mix(panel, '#ffffff', 0.09), '--accent': a1, '--accent2': a2,
+    '--accent-soft': alpha(a1, 0.16), '--accent-glow': alpha(a1, 0.35),
+    '--on-accent': lum > 0.72 ? '#0b0b10' : '#ffffff', // dark text on very bright accents (Lime)
+  };
+  for (const [k, v] of Object.entries(vars)) document.documentElement.style.setProperty(k, v);
+  if (window.rgb && window.rgb.setTitleBar) window.rgb.setTitleBar(bg); // window buttons match the theme
+  document.querySelectorAll('#setTheme .theme-card').forEach((c) => c.classList.toggle('on', c.dataset.v === key));
+  try { localStorage.setItem('rgbTheme', key); } catch (_) {}
+}
+
+// Range sliders: color the filled part (CSS can't read the value by itself).
+function fillRanges() {
+  document.querySelectorAll('input[type=range]').forEach((r) => {
+    const pct = ((+r.value - +(r.min || 0)) / ((+(r.max || 100)) - +(r.min || 0))) * 100;
+    if (r._fill !== pct) { r._fill = pct; r.style.setProperty('--fill', pct + '%'); }
+  });
+}
+document.addEventListener('input', (e) => { if (e.target.type === 'range') fillRanges(); });
+setInterval(fillRanges, 400); // also picks up values set from code
+// Paint the last-used theme right away (settings arrive a moment later).
+try { appSettings.theme = localStorage.getItem('rgbTheme') || undefined; applyAppearance(); } catch (_) {}
+
+function applyRingUi() {
+  const mode = appSettings.krakenRingMode === 'smooth' ? 'smooth' : 'live';
+  document.querySelectorAll('#setRingMode button').forEach((b) => b.classList.toggle('on', b.dataset.v === mode));
+
+}
+
+async function saveSetting(partial) {
+  Object.assign(appSettings, partial);
+  const r = await window.rgb.setSettings(partial);
+  if (r && r.settings) appSettings = r.settings;
+}
+
+async function initSettings() {
+  appSettings = await window.rgb.getSettings();
+  // Theme cards (ClipVault style: panel color, then accent, then accent2)
+  const box = $('#setTheme');
+  for (const [k, [label, a1, a2, , panel]] of Object.entries(THEMES)) {
+    const c = document.createElement('button');
+    c.className = 'theme-card';
+    c.dataset.v = k;
+    c.textContent = label;
+    c.style.background = `linear-gradient(135deg, ${panel} 0%, ${panel} 55%, ${a1} 56%, ${a1} 78%, ${a2} 79%, ${a2} 100%)`;
+    c.onclick = () => { saveSetting({ theme: k }); applyAppearance(); };
+    box.appendChild(c);
+  }
+  // Startup
+  $('#setAutoStart').checked = appSettings.autoStart !== false;
+  $('#setAutoStart').onchange = (e) => saveSetting({ autoStart: e.target.checked });
+  // Lighting
+  $('#setDramFps').value = String(appSettings.dramGapMs || 33);
+  $('#setDramFps').onchange = (e) => saveSetting({ dramGapMs: +e.target.value });
+  document.querySelectorAll('#setRingMode button').forEach((b) => {
+    b.onclick = async () => { await saveSetting({ krakenRingMode: b.dataset.v }); applyRingUi(); renderDevices(); };
+  });
+  // GIF search key
+  $('#setGiphyKey').value = appSettings.giphyKey || '';
+  $('#setGiphyKey').onchange = async (e) => {
+    await saveSetting({ giphyKey: e.target.value.trim() });
+    const i = await window.rgb.appInfo();
+    GIPHY_KEY = (i && i.giphyKey) || '';
+  };
+  // About
+  $('#btnOpenLogs').onclick = () => window.rgb.openLogs();
+  refreshAbout();
+  applyAppearance();
+  applyRingUi();
+}
+
+async function refreshAbout() {
+  const info = await window.rgb.appInfo();
+  $('#appVersion').textContent = 'v' + info.version;
+  $('#aboutKraken').textContent = info.kraken
+    ? `Kraken: pump ring ${info.kraken.ring} LEDs` + (info.kraken.fans ? `, fan port ${info.kraken.fans} LEDs` : '')
+    : '';
+}
+document.querySelector('nav button[data-page="settings"]').addEventListener('click', refreshAbout);
+
+// ---- Init ----
+initSettings();
+initEffects().then(renderProfiles).then(() => $('#btnConnect').click()); // auto-connect on launch
+</script>
+</body>
+</html>

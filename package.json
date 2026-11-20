@@ -1,0 +1,83 @@
+{
+  "name": "rgb-studio",
+  "version": "1.1.0",
+  "description": "Personal all-in-one RGB manager: OpenRGB devices + NZXT Kraken Elite LCD",
+  "author": "Anthony",
+  "license": "GPL-3.0-or-later",
+  "main": "src/boot.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "node tools/build.js",
+    "installer": "node tools/build.js --installer"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0"
+  },
+  "dependencies": {
+    "bufferpack": "0.0.6",
+    "openrgb-sdk": "^0.6.0"
+  },
+  "build": {
+    "appId": "com.anthony.rgbstudio",
+    "productName": "RGB Studio",
+    "copyright": "Anthony",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*",
+          "!OpenRGB.*/**"
+        ]
+      },
+      {
+        "from": "kraken",
+        "to": "kraken",
+        "filter": [
+          "**/*",
+          "!*.log",
+          "!*.log.old",
+          "!__pycache__/**"
+        ]
+      },
+      {
+        "from": "peripherals",
+        "to": "peripherals",
+        "filter": [
+          "**/*",
+          "!*.log",
+          "!*.log.old",
+          "!__pycache__/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "RGB-Studio-Setup.exe",
+      "shortcutName": "RGB Studio",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
+    }
+  }
+}

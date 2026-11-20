@@ -1,0 +1,23 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Third-party programs - downloaded by Build RGB Studio.bat / tools\update-*.ps1
+bin/OpenRGB/
+bin/OpenRGB.*/
+bin/LHM/
+
+# Personal: keys, logs, diagnostics, old stuff
+src/local-config.json
+diagnostics/
+_archive/
+*.log
+*.log.old
+__pycache__/
+*.pyc
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
